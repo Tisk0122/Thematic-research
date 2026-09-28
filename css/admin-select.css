@@ -1,0 +1,104 @@
+/* ============================================================
+   カスタムセレクト（管理者パネル）
+   admin-select.js が生成するトリガー／ポップアップの見た目。
+   ============================================================ */
+
+.cs-wrap { position: relative; display: inline-block; }
+
+/* 元のnative selectは値の入れ物としてのみ残す（非表示） */
+select.cs-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cs-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 11px 0 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), background var(--dur-fast);
+}
+.cs-trigger:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-hover); }
+.cs-trigger:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--focus-dim);
+}
+.cs-trigger.is-open {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--focus-dim);
+  background: var(--surface-hover);
+}
+.cs-trigger:disabled,
+.cs-trigger.is-disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cs-trigger-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-arrow {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.cs-trigger.is-open .cs-arrow { transform: rotate(180deg); color: var(--focus); }
+
+/* --- ポップアップ（document.body 直下に配置） --- */
+.cs-panel {
+  position: fixed;
+  z-index: 260;
+  display: none;
+  min-width: 120px;
+  padding: 6px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transform-origin: top center;
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.cs-panel.cs-panel-up { transform-origin: bottom center; transform: translateY(4px) scale(0.98); }
+.cs-panel.is-open { opacity: 1; transform: none; }
+
+.cs-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+.cs-option-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-option.is-active { background: var(--surface-hover); }
+.cs-option.is-selected { color: var(--focus); font-weight: 700; }
+.cs-option.is-disabled { color: var(--text-dim); cursor: not-allowed; }
+.cs-check { flex-shrink: 0; color: var(--focus); }
+
+.cs-panel::-webkit-scrollbar { width: 8px; }
+.cs-panel::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--r-full); }
+.cs-panel::-webkit-scrollbar-track { background: transparent; }

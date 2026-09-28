@@ -1,0 +1,10 @@
+config.env
+data/
+logs/
+recordings/
+node_modules/
+.browser-profile/
+*.db
+*.db-shm
+*.db-wal
+*.log

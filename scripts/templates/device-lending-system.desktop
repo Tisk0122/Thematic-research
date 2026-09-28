@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=端末貸出管理システム
+Comment=Chromebook端末貸出管理システムを起動します
+Exec=__EXEC__
+Icon=__ICON__
+Terminal=false
+Categories=Utility;Education;
+Path=__DIR__
+StartupNotify=true

@@ -1,0 +1,257 @@
+/* ============================================================
+   ベースリセット & 全体レイアウト
+   ============================================================ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
+
+body {
+  font-family: var(--font-text);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(79, 156, 127, 0.05), transparent 60%),
+    var(--bg);
+  transition: background var(--dur-med) var(--ease);
+}
+
+button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* スクロールバー（Webkit） */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-full);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ============================================================
+   シェル全体
+   ============================================================ */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: 0.01em;
+}
+
+.topbar-brand-mark {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--ok-dim);
+  color: var(--ok-strong);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.topbar-spacer { flex: 1; }
+
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-sub);
+  padding: 5px 10px;
+  border-radius: var(--r-full);
+  background: var(--surface-sunken);
+}
+
+.topbar-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+}
+.topbar-status-dot.is-ok { background: var(--ok-strong); box-shadow: 0 0 0 3px var(--ok-dim); }
+.topbar-status-dot.is-warn { background: var(--warn-strong); box-shadow: 0 0 0 3px var(--warn-dim); }
+.topbar-status-dot.is-danger { background: var(--danger-strong); box-shadow: 0 0 0 3px var(--danger-dim); }
+
+.icon-btn {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-sub);
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+.icon-btn:hover { background: var(--surface-hover); color: var(--text); border-color: var(--border); }
+
+.body-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ============================================================
+   サイドバー
+   ============================================================ */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 14px 10px;
+  overflow-y: auto;
+  transition: width var(--dur-med) var(--ease), padding var(--dur-med) var(--ease);
+}
+
+.sidebar-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  padding: 14px 10px 6px;
+}
+.sidebar-section-label:first-child { padding-top: 4px; }
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: var(--r-md);
+  background: transparent;
+  border: none;
+  color: var(--text-sub);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  transition: background var(--dur-fast), color var(--dur-fast);
+  position: relative;
+}
+.nav-btn svg { flex-shrink: 0; }
+.nav-btn:hover { background: var(--surface-hover); color: var(--text); }
+.nav-btn.active {
+  background: var(--ok-dim);
+  color: var(--ok-strong);
+}
+.nav-btn.active::before {
+  content: '';
+  position: absolute;
+  left: -10px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px;
+  border-radius: var(--r-full);
+  background: var(--ok-strong);
+}
+
+.nav-btn-badge {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--danger-dim);
+  color: var(--danger-strong);
+  min-width: 18px;
+  text-align: center;
+}
+
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 26px 60px;
+}
+
+.main-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.view { display: none; flex-direction: column; gap: 18px; }
+.view.active { display: flex; }
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-head h1 {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.page-head p {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-top: 3px;
+}
+
+.page-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ============================================================
+   レスポンシブ
+   ============================================================ */
+@media (max-width: 980px) {
+  .sidebar { width: var(--sidebar-w-collapsed); padding: 14px 8px; }
+  .sidebar .nav-btn span.nav-label { display: none; }
+  .sidebar-section-label { display: none; }
+  .nav-btn { justify-content: center; padding: 11px; }
+  .nav-btn.active::before { left: -8px; }
+  .main { padding: 16px 14px 60px; }
+}
+
+@media (max-width: 640px) {
+  .topbar-brand-text { display: none; }
+  .page-head { flex-direction: column; }
+}

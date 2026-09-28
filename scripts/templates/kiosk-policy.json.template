@@ -1,0 +1,44 @@
+{
+  "DeveloperToolsAvailability": 2,
+  "TranslateEnabled": false,
+  "PrintingEnabled": false,
+  "BrowserSignin": 0,
+  "SyncDisabled": true,
+  "PasswordManagerEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "BrowserAddPersonEnabled": false,
+  "BrowserGuestModeEnabled": false,
+  "IncognitoModeAvailability": 1,
+  "ExtensionInstallBlocklist": ["*"],
+  "BookmarkBarEnabled": false,
+  "EditBookmarksEnabled": false,
+  "ShowFullUrlsInAddressBar": false,
+  "SavingBrowserHistoryDisabled": true,
+  "AllowFileSelectionDialogs": true,
+  "DownloadRestrictions": 3,
+  "PromptForDownloadLocation": false,
+  "URLBlocklist": ["*"],
+  "URLAllowlist": [
+    "http://localhost:__PORT__",
+    "http://127.0.0.1:__PORT__"
+  ],
+  "VideoCaptureAllowedUrls": [
+    "http://localhost:__PORT__",
+    "http://127.0.0.1:__PORT__"
+  ],
+  "AudioCaptureAllowedUrls": [
+    "http://localhost:__PORT__",
+    "http://127.0.0.1:__PORT__"
+  ],
+  "RestoreOnStartup": 4,
+  "RestoreOnStartupURLs": ["http://localhost:__PORT__/"],
+  "HomepageLocation": "http://localhost:__PORT__/",
+  "HomepageIsNewTabPage": false,
+  "NewTabPageLocation": "http://localhost:__PORT__/",
+  "DefaultSearchProviderEnabled": false,
+  "SpellcheckEnabled": false,
+  "UserFeedbackAllowed": false,
+  "MetricsReportingEnabled": false,
+  "BuiltInDnsClientEnabled": false,
+  "DeviceAllowMGSToStoreDisplayProperties": false
+}

@@ -1,0 +1,385 @@
+/* ============================================================
+   キオスク画面（生徒用）限定のナビゲーション抑制
+   ------------------------------------------------------------
+   - 左右にスワイプした際のブラウザ「戻る/進む」（履歴ナビ）を抑制する。
+   - overscroll-behavior-x:none はタッチパネル・トラックパッドの
+     左右オーバースクロール（履歴ナビ）をブラウザ標準で無効化する。
+   - 縦スクロールは維持する（返却チェックリスト等の縦長ページ用）。
+   - 管理者画面（body[data-page="admin"]）には適用されない。
+   ============================================================ */
+html[data-navlock] body[data-page="kiosk"],
+body[data-page="kiosk"] {
+  overscroll-behavior-x: none;
+  overscroll-behavior: none;
+  touch-action: pan-y pinch-zoom;
+}
+
+body[data-page="kiosk"] .scroll-area,
+body[data-page="kiosk"] .page,
+body[data-page="kiosk"] .page-inner {
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
+  touch-action: pan-y pinch-zoom;
+}
+
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg);
+}
+
+
+.header {
+  background: linear-gradient(135deg, var(--blue) 0%, var(--blue-dk) 100%);
+  height: var(--header-h);
+  box-shadow: 0 2px 10px rgba(29, 78, 216, .3);
+  z-index: 100;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.header-inner {
+  max-width: var(--container-max);
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--page-px);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.header-icon {
+  width: 42px;
+  height: 42px;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.header-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+
+
+.header-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, .7);
+  margin-top: 1px;
+  white-space: nowrap;
+}
+
+.header-clock {
+  font-size: 19px;
+  font-weight: 700;
+  color: white;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  font-family: 'Courier New', monospace;
+  flex-shrink: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+
+.scroll-area {
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+
+.page {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.page.active {
+  display: flex;
+  animation: page-fade-in 180ms ease-out;
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.page-inner {
+  max-width: var(--container-max);
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--page-px) 24px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  max-height: calc(100vh - var(--header-h));
+}
+
+.page-inner::-webkit-scrollbar {
+  display: none;
+}
+
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0 0;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.back-btn {
+  width: var(--hit-target-sm);
+  height: var(--hit-target-sm);
+  min-width: var(--hit-target-sm);
+  border-radius: 12px;
+  border: 1.5px solid var(--gray-200);
+  background: var(--surface);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-700);
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--dur-fast) var(--ease);
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform;
+}
+
+.back-btn:active {
+  transform: scale(.93);
+}
+
+.page-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--gray-900);
+  line-height: 1.2;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  margin-bottom: 8px;
+}
+
+.info-note {
+  padding: 4px var(--page-px) 12px;
+  font-size: 12px;
+  color: var(--gray-500);
+  text-align: center;
+  line-height: 1.6;
+}
+
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.loading-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.loading-card {
+  background: var(--surface);
+  border-radius: 24px;
+  padding: 40px 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-shadow: var(--shadow-xl);
+  min-width: 300px;
+}
+
+
+.loading-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+}
+
+.loading-icon-area {
+  width: 52px;
+  height: 52px;
+  border: 4px solid var(--gray-200);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: li-spin .8s linear infinite;
+}
+
+@keyframes li-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+@keyframes li-icon-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+
+.system-progress {
+  width: 200px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 100px;
+  overflow: hidden;
+  position: relative;
+}
+
+.system-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: var(--blue);
+  border-radius: 100px;
+  transition: width 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
+}
+
+.system-progress-bar.indeterminate {
+  width: 30%;
+  animation: li-progress-indet 1.5s infinite linear;
+}
+
+@keyframes li-progress-indet {
+  0% {
+    left: -35%;
+  }
+
+  100% {
+    left: 105%;
+  }
+}
+
+.loading-percentage {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-500);
+  font-variant-numeric: tabular-nums;
+  margin-top: -8px;
+}
+
+
+.loading-label {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gray-900);
+  text-align: center;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.loading-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gray-500);
+  text-align: center;
+  margin-top: -8px;
+  line-height: 1.4;
+}
+
+
+.auto-return-bar {
+  width: 200px;
+  height: 8px;
+  background: var(--gray-150);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.auto-return-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), #34d399);
+  border-radius: 2px;
+  width: 100%;
+  transform-origin: left;
+  will-change: transform;
+}
+
+.auto-return-label {
+  font-size: 11px;
+  color: var(--gray-500);
+  margin-bottom: 16px;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,140 @@
+/* フォント定義（@font-face）は css/fonts.css に一本化している。
+   index.html では css/fonts.css を先に読み込む（admin.html も同様）。 */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  
+  --blue:       #1d4ed8;
+  --blue-hover: #2563eb;
+  --blue-dk:    #1e3a8a;
+  --blue-lt:    #eff6ff;
+  --blue-mid:   #bfdbfe;
+
+  --green:      #15803d;
+  --green-hover:#16a34a;
+  --green-dk:   #14532d;
+  --green-lt:   #f0fdf4;
+  --green-mid:  #bbf7d0;
+
+  --red:        #dc2626;
+  --red-lt:     #fef2f2;
+  --red-border: #fca5a5;
+
+  --amber:      #b45309;
+  --amber-bg:   #fffbeb;
+  --amber-border:#fcd34d;
+
+  --orange:     #ea580c;
+
+  
+  --gray-50:   #f8fafc;
+  --gray-100:  #f1f5f9;
+  --gray-150:  #eaeff5;
+  --gray-200:  #e2e8f0;
+  --gray-300:  #cbd5e1;
+  --gray-400:  #94a3b8;
+  --gray-500:  #64748b;
+  --gray-600:  #475569;
+  --gray-700:  #334155;
+  --gray-800:  #1e293b;
+  --gray-900:  #0f172a;
+
+  
+  --surface:   #ffffff;
+  --bg:        #f3f4f6;
+  --bg-subtle: #f9fafb;
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  
+  --r-xs:  6px;
+  --r-sm:  10px;
+  --r:     14px;
+  --r-lg:  16px;
+  --r-xl:  24px;
+  --r-2xl: 32px;
+
+  
+  --card-border: 0.5px solid var(--gray-200);
+
+  
+  --shadow-xs: 0 1px 2px rgba(0,0,0,.05);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+  --shadow:    0 4px 12px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.04);
+  --shadow-md: 0 6px 20px rgba(0,0,0,.09), 0 2px 6px rgba(0,0,0,.04);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.10), 0 4px 8px rgba(0,0,0,.04);
+  --shadow-xl: 0 20px 48px rgba(0,0,0,.13), 0 6px 12px rgba(0,0,0,.05);
+
+  
+  --btn-blue-shadow:  0 4px 14px 0 rgba(29, 78, 216, 0.39);
+  --btn-green-shadow: 0 4px 14px 0 rgba(21, 128, 61, 0.39);
+
+  
+  /* このキオスク画面はChromebookの全画面モード(横長・約1366×768想定)専用に
+     固定表示される前提のため、レスポンシブ切り替えは行わず、大画面向けの
+     値をそのまま既定値として使う。 */
+  --header-h:  60px;
+  --page-px:   40px;
+  --container-max: 1320px;
+  --hit-target: 56px;
+  --hit-target-sm: 48px;
+
+  
+  --dur-fast:  100ms;
+  --dur-base:  150ms;
+  --ease:      cubic-bezier(.4, 0, .2, 1);
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--bg);
+  color: var(--gray-900);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  overscroll-behavior: none; 
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent; 
+  user-select: none; 
+  cursor: default;   
+}
+
+/* ============================================================
+   共通マイクロインタラクション
+   ------------------------------------------------------------
+   複数のCSSファイル（components.css, maintenance.css, pages.css）から
+   参照される汎用アニメーションはここに一本化する。
+   ============================================================ */
+
+/* カード・ダイアログ類の出現アニメーション。
+   ふわっと浮き上がりながら少しだけ拡大する、控えめで上品な入場演出。
+   （旧: apw-in という名前で components.css / maintenance.css から
+   参照されていたが定義が存在せず、実質アニメーションなしになっていた） */
+@keyframes apw-in {
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* エラー発生を知らせる、ごく短い横シェイク。
+   「うまくいかなかった」ことを画面自体の反応として一瞬伝えるために使う。
+   大げさにならないよう、振れ幅は小さく・時間も短く抑えている。 */
+@keyframes shake-x {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(5px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(3px); }
+}
+
+.shake-on-error {
+  animation: shake-x 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shake-on-error { animation: none; }
+}

@@ -1,0 +1,132 @@
+/* ============================================================
+   デザイントークン — 端末貸出管理システム 管理者パネル
+   ------------------------------------------------------------
+   方針:
+   - 学校の運用ツールとして「今どうなっているか一瞬でわかる」ことを最優先。
+   - 状態色は 正常=深緑 / 注意=琥珀 / 危険=赤茶 の3値に統一し、
+     装飾用のブランドカラーは持たない（すべての色に意味を持たせる）。
+   - オフラインのキオスク端末で動くため、フォントは自己ホスト済みの
+     Noto Sans JP のウェイト差だけで情報階層を作る。
+   ============================================================ */
+
+:root {
+  /* --- 背景・面 --- */
+  --bg: #12141b;
+  --bg-elevated: #171a23;
+  --surface: #1c202b;
+  --surface-hover: #232735;
+  --surface-sunken: rgba(0, 0, 0, 0.22);
+  --border: rgba(233, 230, 220, 0.09);
+  --border-strong: rgba(233, 230, 220, 0.16);
+
+  /* --- テキスト --- */
+  --text: #e9e6dc;
+  --text-sub: #a3a89c;
+  --text-dim: #6f7568;
+  --text-on-accent: #0d130f;
+
+  /* --- 機能色（意味を持つ色はこの3系統のみ） ---
+     正常 / 稼働 / 完了 = 深緑
+     注意 / 要確認       = 琥珀
+     危険 / 故障 / 削除  = 赤茶
+  */
+  --ok: #4f9c7f;
+  --ok-strong: #6fc39f;
+  --ok-dim: rgba(79, 156, 127, 0.14);
+  --ok-border: rgba(79, 156, 127, 0.32);
+
+  --warn: #c99a3d;
+  --warn-strong: #e0b256;
+  --warn-dim: rgba(201, 154, 61, 0.14);
+  --warn-border: rgba(201, 154, 61, 0.34);
+
+  --danger: #c0645a;
+  --danger-strong: #d98a80;
+  --danger-dim: rgba(192, 100, 90, 0.14);
+  --danger-border: rgba(192, 100, 90, 0.34);
+
+  /* --- 中立の強調（リンクや選択状態など、状態を表さない強調） --- */
+  --focus: #7c9c8e;
+  --focus-dim: rgba(124, 156, 142, 0.16);
+
+  /* --- 形状 --- */
+  --r-sm: 7px;
+  --r-md: 11px;
+  --r-lg: 16px;
+  --r-full: 999px;
+
+  /* --- 影 --- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.38);
+
+  /* --- フォント ---
+     オフライン運用必須のため、外部フォントは追加しない。
+     Noto Sans JP のウェイトのみで階層を作る。数値は等幅にして
+     桁の揃いで読み取りやすくする。
+  */
+  --font-text: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* --- サイドバー幅 --- */
+  --sidebar-w: 236px;
+  --sidebar-w-collapsed: 68px;
+
+  /* --- アニメーション --- */
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --dur-fast: 0.13s;
+  --dur-med: 0.22s;
+}
+
+/* ============================================================
+   ライトモード
+   紙のような温かいオフホワイト。純白は使わず、印刷物に近い質感。
+   機能色は彩度を落とさず、コントラスト比を保つよう個別に調整。
+   ============================================================ */
+[data-theme="light"] {
+  --bg: #f1f4f2;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #edf1ee;
+  --surface-sunken: rgba(24, 39, 31, 0.055);
+  --border: rgba(24, 39, 31, 0.12);
+  --border-strong: rgba(24, 39, 31, 0.2);
+
+  --text: #19231e;
+  --text-sub: #46534b;
+  --text-dim: #626d66;
+  --text-on-accent: #ffffff;
+
+  --ok: #2f7a5c;
+  --ok-strong: #1f6349;
+  --ok-dim: rgba(47, 122, 92, 0.10);
+  --ok-border: rgba(47, 122, 92, 0.30);
+
+  --warn: #9a6d17;
+  --warn-strong: #7d5710;
+  --warn-dim: rgba(154, 109, 23, 0.10);
+  --warn-border: rgba(154, 109, 23, 0.30);
+
+  --danger: #a8483d;
+  --danger-strong: #8c372e;
+  --danger-dim: rgba(168, 72, 61, 0.10);
+  --danger-border: rgba(168, 72, 61, 0.30);
+
+  --focus: #3d6656;
+  --focus-dim: rgba(61, 102, 86, 0.10);
+
+  --shadow-sm: 0 1px 2px rgba(24, 39, 31, 0.07);
+  --shadow-md: 0 4px 16px rgba(24, 39, 31, 0.09);
+  --shadow-lg: 0 12px 32px rgba(24, 39, 31, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

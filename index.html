@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <title>端末貸出管理システム</title>
+  <link rel="icon" href="img/icon.png" type="image/png">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/maintenance.css">
+</head>
+
+<body data-page="kiosk">
+
+
+  <div class="arduino-alert-bar" id="arduino-alert-bar" role="alert" aria-live="assertive">
+    <svg class="aab-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+    <svg class="aab-icon-ok" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+    <div class="arduino-alert-bar-text">
+      <strong id="arduino-alert-bar-title">Arduino（施錠装置）が切断されています</strong>
+      <span id="arduino-alert-bar-desc">扉の自動解錠ができないため、貸出を停止しています</span>
+    </div>
+  </div>
+
+  <div class="loading-overlay show" id="loading-overlay" role="status" aria-live="polite">
+    <div class="loading-card">
+      <div class="loading-visual">
+
+
+        <div class="loading-icon-area" id="loading-icon-area"></div>
+
+        <div class="system-progress">
+          <div class="system-progress-bar" id="loading-progress-bar"></div>
+        </div>
+        <div class="loading-percentage" id="loading-percentage">0%</div>
+      </div>
+      <div class="loading-label" id="loading-label">システム処理中...</div>
+      <div class="loading-sub" id="loading-sub">通信を確立しています</div>
+    </div>
+  </div>
+
+  <div class="app">
+
+
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-left">
+          <div class="header-icon">
+            <img src="img/icon.png" alt="アプリアイコン">
+          </div>
+          <div id="header-title-tap" style="-webkit-tap-highlight-color:transparent;cursor:default;">
+            <div class="header-title">端末貸出管理システム</div>
+            <div class="header-sub" id="header-sub-text">佐土原高校 情報技術科</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="header-clock" id="header-clock"></div>
+        </div>
+      </div>
+    </header>
+
+
+    <main class="scroll-area">
+
+
+      <div class="page active" id="page-top">
+        <div class="page-inner">
+
+
+          <div class="status-banner" id="status-banner">
+            <div class="status-dot" id="status-dot"></div>
+            <div class="status-text" id="status-text" aria-live="polite" aria-atomic="true">
+              <strong>読み込み中...</strong>
+            </div>
+            <button class="status-refresh-icon" id="status-refresh-btn" onclick="refreshStatus()" aria-label="状況を更新">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              </svg>
+            </button>
+          </div>
+
+
+          <div class="top-actions">
+            <div class="action-card checkout" id="action-checkout" onclick="goToCheckout()" role="button" tabindex="0"
+              aria-label="貸出：端末を借りる">
+              <div id="suspended-badge" class="suspended-badge" style="display:none;">貸出休止中</div>
+              <div class="action-icon-wrap blue">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" />
+                  <path d="M8 21h8M12 17v4" />
+                </svg>
+              </div>
+              <div class="action-label blue">貸出</div>
+              <div class="action-desc">端末を借りる<br>空きを自動割り当て</div>
+            </div>
+            <div class="action-card ret" id="action-return" onclick="goToReturn()" role="button" tabindex="0"
+              aria-label="返却：端末を返す">
+              <div id="return-suspended-badge" class="suspended-badge" style="display:none;">返却休止中</div>
+              <div class="action-icon-wrap green">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 14l-4-4 4-4" />
+                  <path d="M5 10h11a4 4 0 0 1 0 8h-1" />
+                </svg>
+              </div>
+              <div class="action-label green">返却</div>
+              <div class="action-desc">端末を返す<br>名前を選んで返却</div>
+            </div>
+          </div>
+
+
+          <div class="door-grid-section">
+            <div class="door-grid-header">
+              <span class="section-label" style="margin-bottom:0">扉の開閉状態</span>
+            </div>
+            <div class="door-grid" id="door-status-grid">
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+
+      <div class="page" id="page-checkout">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="checkoutGoBack()" aria-label="前のステップに戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">端末の貸出</div>
+            <div class="checkout-step-count" id="checkout-step-count"></div>
+          </div>
+
+          <div class="checkout-step-dots" id="checkout-step-dots"></div>
+
+
+          <div class="rec-notice" id="checkout-rec-notice">
+            <span class="rec-notice-dot"></span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+              <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.82v6.36a1 1 0 0 1-1.447.89L15 14" />
+              <rect x="2" y="6" width="14" height="12" rx="2" />
+            </svg>
+            <span>本人確認のため映像のみ録画中（音声なし）</span>
+            <span class="rec-notice-sub">貸出完了後に自動保存されます</span>
+          </div>
+
+
+          <div class="form-section">
+            <div class="section-label" id="checkout-section-label">利用者情報</div>
+            <div class="form-card">
+              <div class="form-row" id="row-co-name">
+                <div class="name-input-group">
+                  <div class="name-input-field is-active">
+                    <label for="co-family-name">姓</label>
+                    <input class="form-input" type="text" id="co-family-name" placeholder="やまだ" autocomplete="off"
+                      inputmode="none" lang="ja" maxlength="20" readonly aria-label="姓" aria-required="true">
+                  </div>
+                  <div class="name-input-field">
+                    <label for="co-given-name">名</label>
+                    <input class="form-input" type="text" id="co-given-name" placeholder="たろう" autocomplete="off"
+                      inputmode="none" lang="ja" maxlength="20" readonly aria-label="名" aria-required="true">
+                  </div>
+                </div>
+                <div class="name-kbd-tabs" id="co-name-kbd-tabs" role="tablist" aria-label="文字種の切り替え">
+                  <button type="button" class="name-kbd-tab active" data-mode="hiragana" role="tab"
+                    aria-selected="true">ひらがな</button>
+                  <button type="button" class="name-kbd-tab" data-mode="katakana" role="tab"
+                    aria-selected="false">カタカナ</button>
+                  <button type="button" class="name-kbd-tab" data-mode="romaji" role="tab"
+                    aria-selected="false">ローマ字</button>
+                </div>
+                <div class="onkey-pad onkey-pad--kana" id="co-name-keypad" role="group" aria-label="名前入力用キーパッド"></div>
+              </div>
+              <div class="form-row" id="row-co-grade">
+                <div class="grade-select-grid" id="co-email-patterns" role="group" aria-label="学年を選択">
+
+                </div>
+              </div>
+              <div class="form-row" id="row-co-email">
+                <div class="email-input-group">
+                  <span class="email-prefix" id="co-email-prefix"></span>
+                  <input class="form-input email-main-input" type="text" id="co-email-part" placeholder="----"
+                    autocomplete="off" inputmode="none" pattern="[0-9]*" readonly aria-label="学籍番号">
+                  <span class="email-suffix" id="co-email-suffix"></span>
+                </div>
+                <div class="email-hint" id="co-email-hint"></div>
+
+                <div class="onkey-pad" id="co-email-keypad" role="group" aria-label="専用キーパッド"></div>
+              </div>
+              <div class="form-row dob-entry-layout" id="row-co-dob">
+                <div class="dob-entry-panel">
+                  <div class="form-hint-standalone">例：2013年5月9日→20130509</div>
+                  <div class="dob-input-group" id="co-dob-input-group">
+                    <input class="form-input dob-main-input" type="text" id="co-dob-part" placeholder="YYYY MM DD"
+                      autocomplete="off" inputmode="none" pattern="[0-9]*" readonly aria-label="生年月日（数字8桁）">
+                  </div>
+                </div>
+                <div class="dob-keypad-panel">
+                  <div class="dob-keypad-heading">数字を入力</div>
+                  <div class="onkey-pad onkey-pad--numeric" id="co-dob-keypad" role="group" aria-label="生年月日用キーパッド">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="btn-area">
+            <button class="primary-btn blue" id="checkout-btn" onclick="doCheckout()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
+              空き端末を割り当てて貸出
+            </button>
+          </div>
+          <div class="info-note">端末は空きがある中から自動で割り当てられます</div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-checkout-confirm">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="backFromCheckoutConfirm()" aria-label="入力画面に戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">本人確認</div>
+          </div>
+
+
+
+          <div class="rec-notice" id="confirm-rec-notice">
+            <span class="rec-notice-dot"></span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+              <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.82v6.36a1 1 0 0 1-1.447.89L15 14" />
+              <rect x="2" y="6" width="14" height="12" rx="2" />
+            </svg>
+            <span>映像のみ録画中（音声なし）— 内容確認後に自動保存</span>
+            <span class="rec-notice-sub">貸出確定で保存、キャンセルで削除</span>
+          </div>
+
+          <div class="confirm-box">
+            <div class="confirm-avatar" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21a8 8 0 1 0-16 0" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <div class="confirm-name" id="co-confirm-name">--- さん</div>
+            <div class="confirm-meta">
+              <span id="co-confirm-email">メールアドレス：---</span><br>
+              <span id="co-confirm-dob">生年月日：---</span>
+            </div>
+            <div class="confirm-divider"></div>
+            <div class="confirm-question">入力内容に間違いありませんか？</div>
+          </div>
+
+          <div class="btn-area">
+            <button class="primary-btn blue" id="checkout-confirm-btn" onclick="finalizeCheckout()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              はい、間違いありません
+            </button>
+            <button class="secondary-btn" onclick="backFromCheckoutConfirm()">いいえ、戻ります</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-checkout-door">
+        <div class="page-inner">
+          <div class="page-header">
+            <div class="page-title">貸出手続き完了</div>
+          </div>
+
+          <div class="door-box">
+            <div class="door-badge">扉が開きます</div>
+            <div class="door-illust" id="checkout-door-illust" aria-hidden="true">
+              <svg class="door-illust__icon door-illust__icon--closed" width="34" height="34" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
+              <svg class="door-illust__icon door-illust__icon--open" width="34" height="34" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 7.5-2.3" />
+              </svg>
+              <svg class="door-illust__icon door-illust__icon--check" width="30" height="30" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              <span class="door-illust__device-dot"></span>
+            </div>
+            <div class="door-device-num" id="door-checkout-num">---</div>
+            <div class="door-desc">番号の扉からChromebookを<br>取り出してください</div>
+          </div>
+
+          <div class="steps-card">
+            <div class="step-row">
+              <div class="step-num done">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <div>
+                <div class="step-title">貸出を記録しました</div>
+                <div class="step-desc" id="done-checkout-detail"></div>
+                <div class="step-rec-saved">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.82v6.36a1 1 0 0 1-1.447.89L15 14" />
+                    <rect x="2" y="6" width="14" height="12" rx="2" />
+                  </svg>
+                  本人確認録画を保存しました
+                </div>
+              </div>
+            </div>
+            <div class="step-row">
+              <div class="step-num active">2</div>
+              <div>
+                <div class="step-title">扉が開いています</div>
+                <div class="step-desc">Chromebookを取り出してください</div>
+              </div>
+            </div>
+            <div class="step-row">
+              <div class="step-num pending" id="checkout-door-step3-num">3</div>
+              <div>
+                <div class="step-title">扉を閉める</div>
+                <div class="step-desc">取り出したら扉を閉めてください<br><span class="door-auto-hint">→ 閉じると自動でトップに戻ります</span></div>
+                <div class="door-close-tip">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                  <span>扉の上の方を押すと閉まりやすいです。ゆっくり押し込んでください。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+          <div class="door-wait-bar-wrap" id="checkout-door-wait">
+            <div class="door-wait-progress-bg">
+              <div class="door-wait-progress-bar indeterminate" id="checkout-door-progress"></div>
+            </div>
+            <div class="door-wait-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              </svg>
+            </div>
+            <span class="door-wait-text" id="checkout-door-wait-text">扉が閉まるのを待っています...</span>
+          </div>
+          <div class="door-open-warning" id="checkout-door-open-warning" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>扉が開いたままです。早めに閉めてください</span>
+          </div>
+
+          <div class="door-help-hint" id="checkout-door-help-hint" style="display:none"></div>
+
+          <div class="btn-area" id="checkout-manual-btn-area" style="display:none;">
+            <button class="primary-btn green" id="checkout-done-btn" onclick="doCheckoutComplete()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              手動で貸出を完了する
+            </button>
+            <p class="door-manual-hint" id="checkout-manual-hint">
+              扉の開閉を確認できません。端末の実物を確認し、管理者に知らせてください。
+            </p>
+            <p class="door-manual-hint" id="checkout-manual-auto-hint"></p>
+            <button class="secondary-btn" onclick="deferDoorCompletion()">あとで対応する（トップに戻る）</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-checkout-warning">
+        <div class="page-inner">
+          <div class="warning-wrapper">
+
+            <div class="warning-content">
+              <div class="warning-hero">
+                <div class="warning-icon-wrap">
+                  <div class="warning-icon-badge">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <path
+                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="warning-title">返却期限のご案内</div>
+
+                <div class="warning-deadline-pill">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3.2 2" />
+                  </svg>
+                  <span>本日 <b id="warn-deadline-time">16:00</b> までに返却</span>
+                </div>
+
+                <p class="warning-body">期限を過ぎた場合、翌日以降の貸出に制限が生じる場合があります。</p>
+
+                <div class="warning-blacklist">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                  </svg>
+                  <span>無断延滞が続くと<strong>ブラックリスト登録</strong>となり、一定期間、端末の貸出ができなくなります。</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="warning-countdown-wrap">
+              <div class="warning-countdown-row">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3.2 2" />
+                </svg>
+                <div class="warning-progress">
+                  <div class="warning-progress-bar" id="warn-progress-bar"></div>
+                </div>
+              </div>
+              <div class="warning-timer-label" id="warn-timer-label">12秒後にトップへ戻ります</div>
+            </div>
+
+            <button class="primary-btn blue" style="max-width:300px;" onclick="cancelWarnAutoReturn(); goTo('top')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              わかりました
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-return-select">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="goTo('top')" aria-label="トップに戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">端末の返却</div>
+          </div>
+
+
+          <div class="return-select-hint">
+            <div class="section-label">自分の名前を選んでください</div>
+          </div>
+          <div id="return-loan-list" class="loan-list">
+
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-return-confirm">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="backFromReturnConfirm()" aria-label="一覧に戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">本人確認</div>
+          </div>
+
+
+          <div class="return-confirm-layout">
+            <div class="return-confirm-left">
+              <div class="confirm-box">
+                <div class="confirm-name" id="rc-name"></div>
+                <div class="confirm-meta">メールアドレス：<span id="rc-email"></span></div>
+                <div class="confirm-device-tag" id="rc-device"></div>
+                <div class="confirm-question">本人であることを確認するため、<br>生年月日を入力してください</div>
+              </div>
+              <div class="dob-entry-panel">
+                <div class="form-hint-standalone">例：2013年5月9日→20130509</div>
+                <div class="dob-input-group" id="rc-dob-input-group">
+                  <input class="form-input dob-main-input" type="text" id="rc-dob-part" placeholder="YYYY MM DD"
+                    autocomplete="off" inputmode="none" pattern="[0-9]*" readonly aria-label="生年月日（数字8桁）">
+                </div>
+              </div>
+            </div>
+            <div class="dob-keypad-panel">
+              <div class="dob-keypad-heading">数字を入力</div>
+              <div class="onkey-pad onkey-pad--numeric" id="rc-dob-keypad" role="group" aria-label="生年月日用キーパッド"></div>
+            </div>
+          </div>
+
+          <div class="btn-area">
+            <button class="primary-btn green" id="return-confirm-btn" onclick="doReturnConfirm()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              はい、返却します
+            </button>
+            <button class="secondary-btn" onclick="backFromReturnConfirm()">違います。選び直す</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-return-checklist">
+        <div class="page-inner">
+          <div class="page-header">
+            <div class="page-title">返却前の確認</div>
+          </div>
+
+          <div class="checklist-intro">
+            <div class="checklist-intro-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+            </div>
+            <div class="checklist-intro-text">扉を開ける前に、以下の3つをすべて確認してください</div>
+          </div>
+
+
+          <div class="checklist-card">
+
+            <div class="checklist-item checklist-item--camcheck" id="chk-item-1">
+              <div class="chk-box" id="chk-box-1">
+                <svg class="chk-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white"
+                  stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <div class="chk-body">
+                <div class="chk-title">ログアウト（アカウント削除）しましたか？</div>
+                <div class="chk-desc" id="logout-check-desc">カメラでログアウト画面（アカウント選択画面）を自動確認します。</div>
+
+                <button class="logout-verify-launch-btn" id="logout-verify-launch-btn" onclick="goToLogoutVerify()">
+                  <svg class="logout-verify-launch-icon logout-verify-launch-icon--cam" width="20" height="20"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.82v6.36a1 1 0 0 1-1.447.89L15 14" />
+                    <rect x="2" y="6" width="14" height="12" rx="2" />
+                  </svg>
+                  <svg class="logout-verify-launch-icon logout-verify-launch-icon--done" width="20" height="20"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                    stroke-linejoin="round" style="display:none;">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                  <span id="logout-verify-launch-text">確認方法を見る</span>
+                  <svg class="logout-verify-launch-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+
+            <div class="checklist-item" id="chk-item-2" onclick="toggleCheck(2)" role="checkbox" aria-checked="false"
+              tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')event.preventDefault(),toggleCheck(2)">
+              <div class="chk-box" id="chk-box-2">
+                <svg class="chk-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white"
+                  stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <div class="chk-body">
+                <div class="chk-title">シャットダウン（終了）しましたか？</div>
+                <div class="chk-desc">電源を切った状態で返却してください<br>スリープではなく「シャットダウン」です</div>
+              </div>
+            </div>
+
+
+            <div class="checklist-item checklist-item--damage checked" id="chk-item-3" onclick="toggleCheck(3)" role="checkbox"
+              aria-checked="true" tabindex="0"
+              onkeydown="if(event.key==='Enter'||event.key===' ')event.preventDefault(),toggleCheck(3)">
+              <div class="chk-box checked" id="chk-box-3">
+                <svg class="chk-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white"
+                  stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <div class="chk-body">
+                <div class="chk-title">端末に破損はありませんか？</div>
+                <div class="chk-desc">破損がある場合はチェックを外して、先生への報告手順に進んでください</div>
+              </div>
+            </div>
+          </div>
+
+
+          <div class="damage-alert" id="damage-alert" style="display:none;">
+            <div class="damage-alert-header">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span>端末の損傷を報告してください</span>
+            </div>
+            <p class="damage-alert-msg">
+              <strong>サーバー室、または情報の先生方にいち早く伝えてください。</strong>
+            </p>
+            <div class="damage-action-btns">
+              <button class="damage-btn damage-btn--teacher" onclick="showDamageTeacherGuide()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                先生がいる場合
+              </button>
+              <button class="damage-btn damage-btn--no-teacher" onclick="showDamageNoTeacherGuide()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 9h6M9 12h6M9 15h4" />
+                </svg>
+                先生がいない場合
+              </button>
+            </div>
+          </div>
+
+
+          <div class="damage-continue-area" id="damage-continue-area" style="display:none;">
+            <button class="secondary-btn damage-continue-btn" onclick="proceedWithDamage()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+              報告済み・このまま返却する
+            </button>
+          </div>
+
+
+          <div class="btn-area" id="checklist-ok-area" style="display:none;">
+            <button class="primary-btn green" id="checklist-ok-btn" onclick="playDoorBtnThenProceed(this)">
+              <span class="btn-door-icon" id="checklist-ok-door-icon" aria-hidden="true">
+                <span class="btn-door-icon__frame"></span>
+                <span class="btn-door-icon__panel"></span>
+              </span>
+              確認完了。扉を開ける
+            </button>
+          </div>
+
+          <div class="checklist-hint" id="checklist-hint">3つすべてにチェックを入れると次へ進めます</div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-logout-guide">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="goTo('return-checklist')" aria-label="チェックリストに戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">ログアウト画面の準備</div>
+          </div>
+
+          <div class="logout-verify-intro">
+            <div class="logout-verify-intro-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.82v6.36a1 1 0 0 1-1.447.89L15 14" />
+                <rect x="2" y="6" width="14" height="12" rx="2" />
+              </svg>
+            </div>
+            <div class="logout-verify-intro-text">
+              <strong>Chromebookをログアウトし、アカウント選択画面を表示してください。</strong><br>
+              下のお手本のような画面になったら、カメラ確認へ進みます。
+            </div>
+          </div>
+
+          <button type="button" class="logout-guide-example" onclick="openLogoutExampleModal()"
+            aria-label="お手本のログアウト画面を拡大表示">
+            <img class="logout-guide-example-image" src="img/logout-example.jpg" alt="ログアウト後に表示されるアカウント選択画面のお手本">
+            <span class="logout-guide-example-caption">お手本の画面</span>
+          </button>
+
+          <div class="btn-area logout-guide-actions">
+            <button class="primary-btn green" onclick="startLogoutCameraCheck()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m15 10 4.6-2.1a1 1 0 0 1 1.4.9v6.4a1 1 0 0 1-1.4.9L15 14" />
+                <rect x="2" y="6" width="13" height="12" rx="2" />
+              </svg>
+              カメラで確認する
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" id="page-logout-verify">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="goTo('logout-guide')" aria-label="案内に戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">ログアウト画面をカメラに映してください</div>
+          </div>
+
+          <div class="logout-cam-preview logout-cam-preview--full logout-cam-preview--pending" id="logout-cam-preview">
+            <video id="logout-cam-video" muted playsinline autoplay></video>
+
+            <div class="logout-cam-frame" aria-hidden="true">
+              <span class="logout-cam-corner tl"></span>
+              <span class="logout-cam-corner tr"></span>
+              <span class="logout-cam-corner bl"></span>
+              <span class="logout-cam-corner br"></span>
+            </div>
+
+            <div class="logout-cam-loading" id="logout-cam-loading" style="display:flex;">
+              <div class="logout-cam-loading-spinner" aria-hidden="true"></div>
+            </div>
+
+            <div class="logout-cam-badge" id="logout-cam-badge">
+              <span class="logout-cam-badge-dot"></span>
+              <span id="logout-cam-badge-text">画面認識モデルを読み込んでいます…</span>
+            </div>
+
+            <div class="logout-cam-success" id="logout-cam-success">
+              <div class="logout-cam-success-icon-wrap">
+                <span class="logout-cam-success-ring" aria-hidden="true"></span>
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path class="logout-cam-success-check" d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <div class="logout-cam-success-text">確認できました！</div>
+            </div>
+            <div class="logout-cam-flash" id="logout-cam-flash" aria-hidden="true"></div>
+          </div>
+
+
+          <div class="logout-cam-wait-bar-wrap" id="logout-cam-wait-bar-wrap">
+            <div class="door-wait-progress-bg">
+              <div class="door-wait-progress-bar" id="logout-cam-progress-bar"></div>
+            </div>
+            <span class="door-wait-text" id="logout-cam-wait-text">認識を待っています…</span>
+          </div>
+
+          <button class="logout-cam-manual-btn logout-cam-manual-btn--full" id="logout-cam-manual-btn"
+            style="display:none;" onclick="confirmLogoutManually()">
+            うまく認識されない場合はこちら：確認しました
+          </button>
+        </div>
+      </div>
+
+      <div class="logout-example-modal" id="logout-example-modal" style="display:none;"
+        onclick="closeLogoutExampleModal(event)">
+        <div class="logout-example-modal-card">
+          <div class="logout-example-modal-head">
+            <span>こんな画面になればOK（お手本）</span>
+            <button type="button" class="logout-example-modal-close" onclick="closeLogoutExampleModal(event)"
+              aria-label="閉じる">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <img src="img/logout-example.jpg" alt="ログアウト画面のお手本（拡大）">
+          <div class="logout-example-modal-caption">画面いっぱいにこの状態が映るようにカメラへ向けてください</div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-damage-teacher">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="goTo('return-checklist')" aria-label="戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">先生への報告手順</div>
+          </div>
+          <div class="damage-guide-card">
+            <div class="damage-guide-icon damage-guide-icon--blue">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <div class="damage-guide-title">情報の先生・サーバー室へ<br>すぐに報告してください</div>
+            <div class="damage-guide-steps">
+              <div class="dg-step">
+                <div class="dg-step-num">1</div>
+                <div class="dg-step-text">端末番号（<span id="dg-device-num-teacher"></span>）を伝える</div>
+              </div>
+              <div class="dg-step">
+                <div class="dg-step-num">2</div>
+                <div class="dg-step-text">どこが・どのように壊れているか説明する</div>
+              </div>
+              <div class="dg-step">
+                <div class="dg-step-num">3</div>
+                <div class="dg-step-text">先生の指示に従って対応する</div>
+              </div>
+            </div>
+            <div class="damage-guide-note">
+              正直に報告することが大切です。<br>隠すとより大きな問題になることがあります。
+            </div>
+            <div class="damage-guide-system-note">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" />
+              </svg>
+              <span>この端末はシステムが自動的に「故障中」として貸出停止にし、管理者に通知します。</span>
+            </div>
+          </div>
+          <div class="btn-area" style="margin-top:8px;">
+            <button class="primary-btn green" onclick="proceedWithDamage()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              先生に報告しました。返却へ進む
+            </button>
+            <button class="secondary-btn" onclick="goTo('return-checklist')">戻る</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-damage-no-teacher">
+        <div class="page-inner">
+          <div class="page-header">
+            <button class="back-btn" onclick="goTo('return-checklist')" aria-label="戻る">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+            </button>
+            <div class="page-title">先生がいない場合</div>
+          </div>
+          <div class="damage-guide-card damage-guide-card--amber">
+            <div class="damage-guide-icon damage-guide-icon--amber">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <div class="damage-guide-title">今日中に必ず先生に<br>自分で伝えてください</div>
+            <div class="damage-guide-steps">
+              <div class="dg-step">
+                <div class="dg-step-num">1</div>
+                <div class="dg-step-text">今はそのまま返却してください</div>
+              </div>
+              <div class="dg-step">
+                <div class="dg-step-num">2</div>
+                <div class="dg-step-text"><strong>後日、自分で先生に報告すること</strong><br>端末番号（<span
+                    id="dg-device-num-no-teacher"></span>）と状況を伝える</div>
+              </div>
+              <div class="dg-step">
+                <div class="dg-step-num">3</div>
+                <div class="dg-step-text">忘れずに翌日以降も先生を見つけて伝える</div>
+              </div>
+            </div>
+            <div class="damage-guide-note damage-guide-note--amber">
+              注意：報告を怠ると、次に借りた人が困ります。<br>必ず自分の口で先生に伝えましょう。
+            </div>
+            <div class="damage-guide-system-note">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" />
+              </svg>
+              <span>この端末はシステムが自動的に「故障中」として貸出停止にし、管理者に通知します。次の人が誤って借りることはありません。</span>
+            </div>
+          </div>
+          <div class="btn-area" style="margin-top:8px;">
+            <button class="primary-btn blue" onclick="proceedWithDamageNotReported()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+              わかりました。後で自分で伝えます
+            </button>
+            <button class="secondary-btn" onclick="goTo('return-checklist')">戻る</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-return-door">
+        <div class="page-inner">
+          <div class="page-header">
+            <div class="page-title">返却手続き</div>
+          </div>
+
+
+          <div class="door-box">
+            <div class="door-badge">扉が開きます</div>
+            <div class="door-illust" id="return-door-illust" aria-hidden="true">
+              <svg class="door-illust__icon door-illust__icon--closed" width="34" height="34" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
+              <svg class="door-illust__icon door-illust__icon--open" width="34" height="34" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 7.5-2.3" />
+              </svg>
+              <svg class="door-illust__icon door-illust__icon--check" width="30" height="30" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              <span class="door-illust__device-dot"></span>
+            </div>
+            <div class="door-device-num" id="door-return-num">---</div>
+            <div class="door-desc" id="door-return-user"></div>
+            <div class="door-desc">番号の扉にChromebookを<br>入れてください</div>
+          </div>
+
+          <div class="steps-card">
+            <div class="step-row">
+              <div class="step-num done">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <div>
+                <div class="step-title">本人確認が完了しました</div>
+                <div class="step-desc" id="done-return-detail"></div>
+              </div>
+            </div>
+            <div class="step-row">
+              <div class="step-num active">2</div>
+              <div>
+                <div class="step-title">扉が開いています</div>
+                <div class="step-desc">Chromebookをケースに入れて扉に置いてください</div>
+                <div class="door-close-tip">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                  <span>端末を優しく入れてください。落とさないようにご注意ください。</span>
+                </div>
+              </div>
+            </div>
+            <div class="step-row">
+              <div class="step-num pending" id="return-door-step3-num">3</div>
+              <div>
+                <div class="step-title">扉を閉める</div>
+                <div class="step-desc">閉めると自動で返却完了になります<br><span class="door-auto-hint">→ 扉閉じを検知して記録します</span></div>
+                <div class="door-close-tip">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                  <span>扉の上の方を押すと閉まりやすいです。ゆっくり押し込んでください。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+          <div class="door-wait-bar-wrap" id="return-door-wait">
+            <div class="door-wait-progress-bg">
+              <div class="door-wait-progress-bar indeterminate" id="return-door-progress"></div>
+            </div>
+            <div class="door-wait-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              </svg>
+            </div>
+            <span class="door-wait-text" id="return-door-wait-text">扉が閉まるのを待っています...</span>
+          </div>
+          <div class="door-open-warning" id="return-door-open-warning" style="display:none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>扉が開いたままです。早めに閉めてください</span>
+          </div>
+
+          <div class="door-help-hint" id="return-door-help-hint" style="display:none"></div>
+
+
+          <div class="btn-area" id="return-manual-btn-area" style="display:none;">
+            <button class="primary-btn green" id="return-done-btn" onclick="doReturnComplete()">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              Chromebookを入れました。返却完了
+            </button>
+            <p class="door-manual-hint" id="return-manual-hint">
+              扉の開閉を確認できません。端末の実物を確認し、管理者に知らせてください。
+            </p>
+            <p class="door-manual-hint" id="return-manual-auto-hint"></p>
+            <button class="secondary-btn" onclick="deferDoorCompletion()">あとで対応する（トップに戻る）</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="page" id="page-return-done">
+        <div class="page-inner">
+          <div class="done-wrapper">
+
+            <div class="done-card">
+              <div class="done-icon-wrap">
+                <div class="done-ring-pulse"></div>
+                <div class="done-icon">
+                  <svg width="40px" height="40px" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green);">
+                    <path class="done-check-path" d="M20 6L9 17l-5-5" />
+                  </svg>
+                </div>
+              </div>
+
+              <div class="done-title">返却が完了しました</div>
+              <div class="done-thanks">ご利用ありがとうございました</div>
+
+              <div class="done-summary" id="return-done-summary">
+                <div class="done-summary-row">
+                  <span class="done-summary-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+                    </svg>
+                    利用者
+                  </span>
+                  <span class="done-summary-value" id="return-done-name">---</span>
+                </div>
+                <div class="done-summary-divider"></div>
+                <div class="done-summary-row">
+                  <span class="done-summary-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="4" width="18" height="12" rx="2" />
+                      <path d="M8 20h8M12 16v4" />
+                    </svg>
+                    返却端末
+                  </span>
+                  <span class="done-device-chip" id="return-done-device">---</span>
+                </div>
+                <div class="done-summary-divider"></div>
+                <div class="done-summary-row">
+                  <span class="done-summary-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 2" />
+                    </svg>
+                    返却時刻
+                  </span>
+                  <span class="done-summary-value" id="return-done-time">---</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="done-footer">
+              <div class="auto-return-bar">
+                <div class="auto-return-bar-fill" id="auto-return-fill"></div>
+              </div>
+              <div class="auto-return-label" id="auto-return-label">5秒後に自動でトップへ戻ります</div>
+              <button class="secondary-btn" style="max-width:240px;" onclick="cancelAutoReturn(); goTo('top')">
+                今すぐトップに戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+    </main>
+  </div>
+
+
+
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+
+
+  <div id="maintenance-overlay" class="maintenance-overlay" style="display:none;">
+    <div class="maintenance-card">
+      <div class="maintenance-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+        </svg>
+      </div>
+      <div class="maintenance-title" id="maintenance-title">システムメンテナンス中</div>
+      <div class="maintenance-msg" id="maintenance-msg">現在、システムの保守点検を行っております。<br>しばらくお待ちください。</div>
+    </div>
+  </div>
+
+
+  <div id="arduino-down-overlay" class="arduino-down-overlay" style="display:none;" role="alertdialog" aria-modal="true"
+    aria-live="assertive" aria-labelledby="arduino-down-title" aria-describedby="arduino-down-msg">
+    <div class="arduino-down-card">
+      <div class="arduino-down-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 2v4M15 2v4M6 10h12l-1 5a5 5 0 0 1-10 0l-1-5z" />
+          <path d="M3 3l18 18" />
+        </svg>
+      </div>
+      <div class="arduino-down-title" id="arduino-down-title">システム停止中</div>
+      <div class="arduino-down-msg" id="arduino-down-msg">
+        施錠装置（Arduino）との接続が切れたため、安全のためシステムを停止しています。<br>
+        復旧するまで、貸出・返却はご利用いただけません。<br>
+        近くの先生かサーバー室にお声がけください。
+      </div>
+      <button class="arduino-down-admin-btn" onclick="showAdminPasswordDialog()">管理者の方はこちら</button>
+    </div>
+  </div>
+
+  <div id="custom-dialog" class="dialog-overlay" style="display:none;" role="dialog" aria-modal="true"
+    aria-labelledby="dialog-title" aria-describedby="dialog-msg">
+    <div class="dialog-card">
+      <div class="dialog-content">
+        <div id="dialog-title" class="dialog-title">タイトル</div>
+        <div id="dialog-msg" class="dialog-msg">メッセージ</div>
+      </div>
+      <div class="dialog-buttons">
+        <button id="dialog-cancel-btn" class="dialog-btn cancel">キャンセル</button>
+        <button id="dialog-ok-btn" class="dialog-btn ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/devices.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/nav-lock.js"></script>
+  <script src="js/fullscreen.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/checkout-form-reset.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/vendor/tf.min.js"></script>
+  <script src="js/vendor/teachablemachine-image.min.js"></script>
+  <script src="js/logout-check.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+
+</html>
