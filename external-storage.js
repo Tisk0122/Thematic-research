@@ -192,7 +192,7 @@ async function _lsblkMountpoints() {
     );
     const data = JSON.parse(stdout);
     const out = [];
-    (function walk(dev) {
+    function walk(dev) {
       const tran = (dev.tran || '').toLowerCase();
       if (tran === 'usb' || tran === 'mmc' || tran === 'sdio') {
         const mps = Array.isArray(dev.mountpoints)
@@ -203,7 +203,7 @@ async function _lsblkMountpoints() {
         }
       }
       for (const child of (dev.children || [])) walk(child);
-    });
+    }
     for (const dev of (data.blockdevices || [])) walk(dev);
     return out;
   } catch (e) {

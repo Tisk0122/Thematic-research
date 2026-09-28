@@ -2702,7 +2702,9 @@ const server = http.createServer(async (req, res) => {
           'Content-Length': stat.size,
           'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}; filename="${name}"`
         });
-        fs.createReadStream(filePath).pipe(res);
+        const stream = fs.createReadStream(filePath);
+        stream.on('error', () => { try { res.destroy(); } catch (_) { } });
+        stream.pipe(res);
         return;
       } catch (e) {
         return json(res, 404, { ok: false, error: 'バックアップファイルが見つかりません' });
