@@ -2127,7 +2127,7 @@ function confirmLogoutManually() {
 function _initReturnChecklist() {
   _chkState[1] = false;
   _chkState[2] = false;
-  _chkState[3] = true;
+  _chkState[3] = false;
   _damageReported = false;
   _logoutCheckMethod = null;
 
@@ -2149,7 +2149,7 @@ function _initReturnChecklist() {
   if (damageAlert) damageAlert.style.display = 'none';
   if (damageContinue) damageContinue.style.display = 'none';
   if (okArea) okArea.style.display = 'none';
-  if (hint) { hint.style.display = ''; hint.textContent = '確認項目にチェックを入れてください。破損がある場合はチェックを外してください。'; }
+  if (hint) { hint.style.display = ''; hint.textContent = '確認項目をチェックしてください。破損がある場合は報告手順へ進んでください。'; }
 
   // 前回のボタン演出（扉が開いたまま・disabled状態）を必ずリセットする
   const okBtn = document.getElementById('checklist-ok-btn');
@@ -2203,27 +2203,34 @@ function _evalChecklist() {
   const okArea = document.getElementById('checklist-ok-area');
   const hint = document.getElementById('checklist-hint');
 
-  const hasDamage = !_chkState[3];
-  const allOk = _chkState[1] && _chkState[2] && _chkState[3];
+  const hasDamage = _chkState[3];
+  const noDamageAllOk = !_chkState[3] && _chkState[1] && _chkState[2];
 
   if (damageAlert) damageAlert.style.display = hasDamage ? '' : 'none';
 
-  if (allOk) {
+  if (hasDamage) {
+    // 破損がある場合: ログアウトチェック・シャットダウンチェックをスキップ可能にし、
+    // 先生に報告済み（または後で伝える）なら即座に返却へ進める
+    if (okArea) okArea.style.display = 'none';
+    if (damageContinue) damageContinue.style.display = _damageReported ? '' : 'none';
+    if (hint) {
+      hint.style.display = _damageReported ? 'none' : '';
+      if (!_damageReported) {
+        hint.textContent = '端末の破損・不具合を先生に報告してください';
+      }
+    }
+  } else if (noDamageAllOk) {
+    // 破損なし（正常）でログアウト・シャットダウンが確認できている場合
     if (damageContinue) damageContinue.style.display = 'none';
     if (okArea) okArea.style.display = '';
     if (hint) hint.style.display = 'none';
-  } else if (hasDamage && _damageReported && _chkState[1] && _chkState[2]) {
-    if (damageContinue) damageContinue.style.display = '';
-    if (okArea) okArea.style.display = 'none';
-    if (hint) hint.style.display = 'none';
   } else {
+    // 破損チェック未選択、またはログアウト/シャットダウンが未完了
     if (damageContinue) damageContinue.style.display = 'none';
     if (okArea) okArea.style.display = 'none';
     if (hint) {
       hint.style.display = '';
-      hint.textContent = hasDamage
-        ? '端末の損傷を報告してから次へ進めます'
-        : '3つすべてにチェックを入れると次へ進めます';
+      hint.textContent = 'ログアウトとシャットダウンを確認し、チェックを入れてください';
     }
   }
 }
@@ -2238,11 +2245,7 @@ function showDamageNoTeacherGuide() {
 
 function proceedWithDamage() {
   _damageReported = true;
-  goTo('return-checklist');
-  const damageContinue = document.getElementById('damage-continue-area');
-  if (damageContinue) damageContinue.style.display = '';
-  const damageAlert = document.getElementById('damage-alert');
-  if (damageAlert) damageAlert.style.display = 'none';
+  proceedToReturnDoor();
 }
 
 function proceedWithDamageNotReported() {
@@ -2900,5 +2903,5 @@ function closeTutorial() {
 
 /* === 起動時のチュートリアル表示 === */
 window.addEventListener('load', () => {
-  setTimeout(showTutorialIfFirstTime, 1500);
+  // チュートリアルダイアログは不要なため非表示
 });
