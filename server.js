@@ -1810,7 +1810,7 @@ function verifySession(req, queryToken, allowDefaultPassword = false) {
   }
 
   session.expires = new Date(Date.now() + SESSION_TTL);
-  return allowDefaultPassword || ADMIN_PASSWORD !== _DEFAULT_ADMIN_PASSWORD;
+  return true;
 }
 
 let _restoreInProgress = false;
@@ -2484,7 +2484,8 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         updatedAt: _settingsUpdatedAt,
         updatedBy: _settingsUpdatedBy,
-        offline: !!(_settingsCache && _settingsCache._offline)
+        offline: !!(_settingsCache && _settingsCache._offline),
+        adminPasswordLength: ADMIN_PASSWORD.length
       });
     }
 
@@ -2702,7 +2703,9 @@ const server = http.createServer(async (req, res) => {
           'Content-Length': stat.size,
           'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}; filename="${name}"`
         });
-        fs.createReadStream(filePath).pipe(res);
+        const stream = fs.createReadStream(filePath);
+        stream.on('error', () => { try { res.destroy(); } catch (_) { } });
+        stream.pipe(res);
         return;
       } catch (e) {
         return json(res, 404, { ok: false, error: 'バックアップファイルが見つかりません' });

@@ -1221,9 +1221,15 @@ function initAdminTrigger() {
   });
 }
 
-function showAdminPasswordDialog() {
+async function showAdminPasswordDialog() {
   const existing = document.getElementById('admin-pw-dialog');
   if (existing) existing.remove();
+
+  let targetLen = 6;
+  try {
+    const res = await fetch(`${ARDUINO_SERVER}/settings/meta`).then(r => r.json());
+    if (res && res.adminPasswordLength) targetLen = res.adminPasswordLength;
+  } catch (e) { }
 
   let _entered = '';
 
@@ -1233,9 +1239,9 @@ function showAdminPasswordDialog() {
     <div class="apw-backdrop"></div>
     <div class="apw-card" role="dialog" aria-modal="true" aria-label="管理者認証">
       <div class="apw-title">管理者認証</div>
-      <div class="apw-sub">パスワードを入力してください</div>
+      <div class="apw-sub" id="apw-sub">パスワードを入力してください（${targetLen}桁）</div>
       <div class="apw-dots" id="apw-dots">
-        ${Array.from({ length: 12 }, (_, i) => `<span class="apw-dot" data-i="${i}"></span>`).join('')}
+        ${Array.from({ length: targetLen }, (_, i) => `<span class="apw-dot" data-i="${i}"></span>`).join('')}
       </div>
       <div class="apw-error" id="apw-error"></div>
       <div class="apw-keypad">
@@ -1258,7 +1264,6 @@ function showAdminPasswordDialog() {
           </svg>
         </button>
       </div>
-      <button class="apw-key apw-key-submit" id="apw-submit" type="button">ログイン</button>
     </div>
   `;
 
@@ -1458,10 +1463,13 @@ function showAdminPasswordDialog() {
 
     const val = key.dataset.val;
     if (val !== undefined) {
-      if (_entered.length < maxLen) {
+      if (_entered.length < targetLen) {
         _entered += val;
         renderDots();
         vibrate(8);
+        if (_entered.length === targetLen) {
+          attempt();
+        }
       }
     }
   });
@@ -1471,10 +1479,6 @@ function showAdminPasswordDialog() {
     errorEl.textContent = '';
     renderDots();
     vibrate(8);
-  });
-  document.getElementById('apw-submit').addEventListener('click', () => {
-    if (_entered.length >= minLen) attempt();
-    else errorEl.textContent = `パスワードは${minLen}桁以上です`;
   });
 
   document.getElementById('apw-cancel').addEventListener('click', () => {

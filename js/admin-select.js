@@ -268,7 +268,15 @@
     });
 
     // select.innerHTML の書き換え（動的な選択肢差し替え）を検知
-    const mo = new MutationObserver(() => { syncLabel(); if (isOpen) buildPanel(); });
+    const mo = new MutationObserver(() => {
+      if (!document.contains(select)) {
+        mo.disconnect();
+        if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
+        return;
+      }
+      syncLabel();
+      if (isOpen) buildPanel();
+    });
     mo.observe(select, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
 
     syncLabel();

@@ -149,24 +149,34 @@ const PIN_MAX_LEN = 12;
 const PIN_MIN_LEN = 6;
 let pinBuffer = '';
 let loginBusy = false;
+let adminPasswordTargetLen = 6;
+
+async function updateAdminPasswordTargetLen() {
+  try {
+    const res = await fetch(ARDUINO_SERVER + '/settings/meta').then(r => r.json());
+    if (res && res.adminPasswordLength) {
+      adminPasswordTargetLen = res.adminPasswordLength;
+    }
+  } catch (e) { }
+}
 
 function renderPinDots() {
   const wrap = document.getElementById('pin-dots');
-  const len = Math.max(pinBuffer.length, PIN_MIN_LEN);
+  const targetLen = adminPasswordTargetLen || PIN_MIN_LEN;
   wrap.innerHTML = '';
-  for (let i = 0; i < Math.max(len, PIN_MIN_LEN); i++) {
+  for (let i = 0; i < targetLen; i++) {
     const dot = document.createElement('span');
     // 直前に打った1桁だけ「ポン」と弾むアニメーションを付ける（それ以前の桁は静止させる）
     const isNew = i === pinBuffer.length - 1;
     dot.className = 'pin-dot' + (i < pinBuffer.length ? ' is-filled' : '') + (isNew ? ' is-new' : '');
     wrap.appendChild(dot);
   }
-  const btn = document.getElementById('login-submit-btn');
-  const canSubmit = pinBuffer.length >= PIN_MIN_LEN && !loginBusy;
-  btn.disabled = !canSubmit;
-  btn.textContent = pinBuffer.length > PIN_MIN_LEN || pinBuffer.length === PIN_MIN_LEN
-    ? 'ログイン'
-    : `ログイン（あと${PIN_MIN_LEN - pinBuffer.length}桁）`;
+}
+
+function checkAutoSubmitLogin() {
+  if (pinBuffer.length === adminPasswordTargetLen && !loginBusy) {
+    submitLogin();
+  }
 }
 
 function pinShakeError(message) {
@@ -215,17 +225,19 @@ function initLoginKeypad() {
     } else if (key === 'back') {
       pinBuffer = pinBuffer.slice(0, -1);
     } else if (/^[0-9]$/.test(key)) {
-      if (pinBuffer.length < PIN_MAX_LEN) pinBuffer += key;
+      if (pinBuffer.length < adminPasswordTargetLen) pinBuffer += key;
     }
     document.getElementById('login-error').textContent = '';
     renderPinDots();
+    checkAutoSubmitLogin();
   });
 
   document.addEventListener('keydown', (e) => {
     if (!document.getElementById('login-screen').classList.contains('is-open') || loginBusy) return;
     if (/^[0-9]$/.test(e.key)) {
-      if (pinBuffer.length < PIN_MAX_LEN) pinBuffer += e.key;
+      if (pinBuffer.length < adminPasswordTargetLen) pinBuffer += e.key;
       renderPinDots();
+      checkAutoSubmitLogin();
     } else if (e.key === 'Backspace') {
       pinBuffer = pinBuffer.slice(0, -1);
       renderPinDots();
@@ -240,8 +252,6 @@ function initLoginKeypad() {
 async function submitLogin() {
   if (pinBuffer.length < PIN_MIN_LEN || loginBusy) return;
   loginBusy = true;
-  const btn = document.getElementById('login-submit-btn');
-  setBtnLoading(btn);
   try {
     const res = await fetch(ARDUINO_SERVER + '/admin/login', {
       method: 'POST',
@@ -265,14 +275,14 @@ async function submitLogin() {
     pinShakeError('サーバーに接続できません');
   } finally {
     loginBusy = false;
-    resetBtn(btn);
     renderPinDots();
   }
 }
 
-function showLoginScreen() {
+async function showLoginScreen() {
   document.getElementById('login-screen').classList.add('is-open');
   pinBuffer = '';
+  await updateAdminPasswordTargetLen();
   renderPinDots();
   document.getElementById('login-error').textContent = '';
   // 前回のログイン成功演出の跡（開いた鍵・退場アニメーション等）を必ずリセットする
@@ -283,7 +293,7 @@ function showLoginScreen() {
   if (mark) mark.classList.remove('is-success', 'is-error');
   if (dots) dots.classList.remove('is-success');
   if (panel) panel.classList.remove('is-leaving');
-  if (sub) sub.textContent = 'パスワードを入力してください（6〜12桁）';
+  if (sub) sub.textContent = `パスワードを入力してください（${adminPasswordTargetLen}桁）`;
 }
 function hideLoginScreen() {
   document.getElementById('login-screen').classList.remove('is-open');

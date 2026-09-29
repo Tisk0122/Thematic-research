@@ -390,8 +390,12 @@ void loop()
         sum += (byte)cmd[i];
       char expected = "0123456789ABCDEF"[sum % 16];
 
+      if (checksumStr.length() == 0)
+      {
+        return;
+      }
       char received = toupper(checksumStr[0]);
-      if (checksumStr.length() == 0 || received != expected)
+      if (received != expected)
       {
         return;
       }
