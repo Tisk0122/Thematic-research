@@ -521,6 +521,11 @@ setInterval(() => {
       _loginAttempts.delete(ip);
     }
   }
+  // 期限切れの管理者セッションも同タイミングで掃除する
+  // （ラジー削除だけでも実害はないが、長期稼働時のMap肥大化を防ぐため）
+  for (const [token, session] of _adminSessions) {
+    if (session.expires < now) _adminSessions.delete(token);
+  }
 }, 60000).unref();
 
 const SESSION_TTL = 30 * 60 * 1000;
@@ -1944,7 +1949,7 @@ async function remuxAndConvert(sessionId, folderOverride) {
   }
 }
 
-function verifySession(req, queryToken, allowDefaultPassword = false) {
+function verifySession(req, queryToken) {
   const auth = req.headers['authorization'] || '';
   const headerToken = auth.replace('Bearer ', '');
   const token = headerToken || queryToken || '';
@@ -2195,7 +2200,7 @@ const server = http.createServer(async (req, res) => {
       // 「現在のパスワード」の一致だけでは/admin/loginにある5回失敗で
       // 15分ロックアウトの仕組みを経由せずに総当たりを試行できてしまうため、
       // 他の管理APIと同様にログイン済みセッションを必須にする。
-      if (!verifySession(req, undefined, true)) return json(res, 403, { ok: false, error: '認証されていません' });
+      if (!verifySession(req)) return json(res, 403, { ok: false, error: '認証されていません' });
 
       const rawIp = req.socket.remoteAddress || '';
       const ip = rawIp.replace(/^::ffff:/, '');
@@ -3465,7 +3470,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (method === 'GET' && url.pathname === '/api/security-status') {
-      if (!verifySession(req, undefined, true)) return json(res, 403, { ok: false, error: '認証されていません' });
+      if (!verifySession(req)) return json(res, 403, { ok: false, error: '認証されていません' });
       return json(res, 200, {
         ok: true,
         adminPasswordIsDefault: ADMIN_PASSWORD === _DEFAULT_ADMIN_PASSWORD,

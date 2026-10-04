@@ -38,6 +38,36 @@ if (!activeLoanColumns.has('unlock_authorized')) {
 }
 ensureColumn('active_loans', 'return_verified_at', "TEXT NOT NULL DEFAULT ''");
 
+// マイグレーション: active_loans.device_id にDBレベルのUNIQUE制約を追加する。
+// アプリケーション層のトランザクションでも二重貸出を防いでいるが、
+// DBレベルでも保証することで、将来の手動操作やスキーマ変更時の事故を防ぐ。
+// SQLiteはALTER TABLE ADD CONSTRAINTを持たないため、UNIQUE INDEXで代替する。
+// 既にUNIQUEインデックスが存在する場合は冪等（何もしない）。
+// 既存データに重複がある場合はエラーにせず警告のみ（運用を止めないため）。
+(function _ensureActiveLoansDeviceUnique() {
+  try {
+    const idxList = db.pragma('index_list(active_loans)');
+    const alreadyUnique = idxList.some(idx => idx.unique === 1 && (() => {
+      const info = db.pragma(`index_info(${idx.name})`);
+      return info.length === 1 && info[0].name === 'device_id';
+    })());
+    if (alreadyUnique) return;
+    // 重複チェック（安全確認）
+    const dup = db.prepare(
+      'SELECT device_id, COUNT(*) c FROM active_loans GROUP BY device_id HAVING c > 1'
+    ).all();
+    if (dup.length > 0) {
+      console.error('[db.js] active_loans に device_id の重複があるためUNIQUEインデックスを作成できません:', dup);
+      return;
+    }
+    // 既存の非UNIQUEインデックスを削除してUNIQUEインデックスに置き換える
+    db.exec('DROP INDEX IF EXISTS idx_active_device');
+    db.exec('CREATE UNIQUE INDEX idx_active_device ON active_loans(device_id)');
+  } catch (e) {
+    console.error('[db.js] active_loans の UNIQUE インデックス作成に失敗しました（無視して続行）:', e.message);
+  }
+})();
+
 // バックアップ機構(server.js側)がDBファイルの実体パスを参照できるように
 // しておく。呼び出し側の使い方(require('./db') がそのままdbインスタンス)
 // を壊さないよう、インスタンスのプロパティとして生やす形にする。
