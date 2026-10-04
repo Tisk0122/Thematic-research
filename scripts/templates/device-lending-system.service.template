@@ -1,0 +1,18 @@
+[Unit]
+Description=端末貸出管理システム
+After=default.target
+# サーバーはキオスク画面の提供に不可欠なため、失敗が続いても再起動する。
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=__DIR__
+ExecStart=__DIR__/scripts/run-server.sh
+Environment=TZ=Asia/Tokyo
+Restart=always
+RestartSec=3
+StandardOutput=append:__DIR__/logs/systemd.log
+StandardError=append:__DIR__/logs/systemd.log
+
+[Install]
+WantedBy=default.target

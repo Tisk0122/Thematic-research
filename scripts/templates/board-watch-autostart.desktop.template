@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=端末貸出管理システム（サブモニター表示の自動検出）
+Comment=HDMI等で拡張ディスプレイを検出したら貸出状況ボードを自動表示します
+Exec=__DIR__/scripts/board-watch.sh
+Icon=__ICON__
+Terminal=false
+X-GNOME-Autostart-enabled=true
+Hidden=false

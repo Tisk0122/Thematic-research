@@ -1,0 +1,372 @@
+/* ============================================================
+   ログイン / ロック画面
+   ============================================================ */
+#login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: var(--bg);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+#login-screen.is-open {
+  display: flex;
+}
+
+.initial-password-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 15, 12, 0.76);
+}
+
+.initial-password-panel {
+  display: grid;
+  gap: 12px;
+  width: min(420px, 100%);
+  max-height: min(90vh, 720px);
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+.initial-password-panel h2 {
+  font-size: 18px;
+}
+
+.initial-password-panel p,
+.initial-password-panel label {
+  color: var(--text-sub);
+}
+
+.initial-password-panel label {
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.initial-password-panel .input {
+  margin-top: 2px;
+}
+
+.password-touch-keypad {
+  display: grid;
+  gap: 7px;
+  padding-top: 4px;
+}
+
+.password-touch-keypad-status {
+  min-height: 1.4em;
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.password-touch-keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.password-touch-key {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-hover);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+.password-touch-key:active {
+  background: var(--ok-dim);
+  border-color: var(--ok-border);
+}
+
+.password-touch-key-action {
+  font-size: 12px;
+}
+
+.initial-password-error {
+  min-height: 1.4em;
+  color: var(--danger-strong);
+  font-size: 12px;
+}
+
+.initial-password-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.login-panel {
+  width: 100%;
+  max-width: 336px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+.login-mark {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-lg);
+  background: var(--ok-dim);
+  border: 1px solid var(--ok-border);
+  color: var(--ok-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .3s ease, border-color .3s ease, transform .25s ease;
+}
+
+/* シャックル（鍵のツル部分）は左下を支点に開閉できるよう分離してある */
+.lock-shackle {
+  transform-box: fill-box;
+  transform-origin: 4% 100%;
+  transition: transform .45s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.lock-check {
+  opacity: 0;
+  stroke-dasharray: 11;
+  stroke-dashoffset: 11;
+}
+
+/* ---- パスワード不一致：本体ごと小さくウィンス ---- */
+.login-mark.is-error {
+  animation: lock-wince .42s ease;
+  border-color: var(--danger-border);
+  color: var(--danger-strong);
+}
+
+@keyframes lock-wince {
+  20% {
+    transform: rotate(-6deg);
+  }
+
+  50% {
+    transform: rotate(5deg);
+  }
+
+  75% {
+    transform: rotate(-3deg);
+  }
+
+  100% {
+    transform: rotate(0);
+  }
+}
+
+/* ---- 認証成功：鍵が開いてチェックが描かれる ---- */
+.login-mark.is-success {
+  background: var(--ok-dim);
+  border-color: var(--ok-strong);
+  transform: scale(1.08);
+}
+
+.login-mark.is-success .lock-shackle {
+  transform: rotate(-38deg) translate(-1.5px, -0.5px);
+}
+
+.login-mark.is-success .lock-check {
+  opacity: 1;
+  stroke-dashoffset: 0;
+}
+
+/* ---- ログインパネル全体：成功時にふわっと退場する ---- */
+.login-panel.is-leaving {
+  animation: login-panel-out .38s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes login-panel-out {
+  to {
+    transform: translateY(-10px) scale(.97);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .lock-shackle,
+  .login-mark {
+    transition-duration: .01ms;
+  }
+
+  .login-mark.is-error,
+  .login-panel.is-leaving {
+    animation: none;
+  }
+
+  .login-mark.is-success .lock-check {
+  opacity: 1;
+  stroke-dashoffset: 0;
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }}
+
+.login-heading {
+  text-align: center;
+}
+
+.login-title {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.login-sub {
+  font-size: 12.5px;
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 9px;
+}
+
+.pin-dots.is-shake {
+  animation: pin-shake 0.42s;
+}
+
+@keyframes pin-shake {
+
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+
+  20%,
+  80% {
+    transform: translateX(3px);
+  }
+
+  30%,
+  50%,
+  70% {
+    transform: translateX(-6px);
+  }
+
+  40%,
+  60% {
+    transform: translateX(6px);
+  }
+}
+
+.pin-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+
+.pin-dot.is-filled {
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.pin-dot.is-error {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* 直前に入力した1桁だけ、ポンと弾むように現れる */
+.pin-dot.is-new {
+  animation: pin-dot-pop .28s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+@keyframes pin-dot-pop {
+  0% {
+    transform: scale(.3);
+  }
+
+  60% {
+    transform: scale(1.35);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 認証成功：ドットを一目で緑に */
+.pin-dots.is-success .pin-dot {
+  background: var(--ok-strong);
+  border-color: var(--ok-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-dot.is-new {
+    animation: none;
+  }}
+
+.login-error {
+  min-height: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--danger-strong);
+}
+
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.pin-key {
+  height: 58px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast), transform var(--dur-fast);
+}
+
+.pin-key:active {
+  transform: scale(0.95);
+  background: var(--surface-hover);
+}
+
+.pin-key-sub {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+
+.login-exit-fs {
+  margin-top: -8px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+  cursor: pointer;
+  text-decoration: underline;
+  -webkit-tap-highlight-color: transparent;
+}

@@ -1,0 +1,46 @@
+/* Noto Sans JP の自己ホスティング（オフライン対応のため）。
+   フォント定義を専用ファイルに一本化し、index.html（キオスク）と
+   admin.html の双方がこのファイルを読み込む。
+   外部CDN（Google Fonts等）には依存しない。 */
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/noto-sans-jp-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/noto-sans-jp-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/noto-sans-jp-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/noto-sans-jp-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../fonts/noto-sans-jp-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('../fonts/noto-sans-jp-900.woff2') format('woff2');
+}

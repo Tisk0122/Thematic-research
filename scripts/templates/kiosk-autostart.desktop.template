@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=端末貸出管理システム（キオスク自動起動）
+Comment=ログイン時にキオスク画面を自動で開きます（クラッシュ時は自動復旧）
+Exec=/bin/bash -c '__DIR__/scripts/kiosk-autostart.sh >> __DIR__/logs/kiosk.log 2>&1'
+Icon=__ICON__
+Terminal=false
+X-GNOME-Autostart-enabled=true
+Hidden=false

@@ -1,0 +1,748 @@
+/* ============================================================
+   貸出状況ボード（board.html）専用スタイル
+   ------------------------------------------------------------
+   - HDMI等で接続した拡張ディスプレイに常時表示する「閲覧専用」の
+     掲示画面。管理画面（admin.html）とは別系統で、tokens.css の
+     デザイントークンのみを共有する。
+   - 離れた場所からでも一瞬で状況がわかることを最優先にした大きめの
+     文字サイズ・高コントラスト構成。
+   ============================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-text);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-size: 16px;
+}
+
+::selection {
+  background: var(--focus-dim);
+}
+
+/* ---------------------------------------------------------
+   起動オーバーレイ / オフライン表示 / サブモニター表示オフ
+--------------------------------------------------------- */
+.board-boot,
+.board-disabled {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--bg);
+  color: var(--text-sub);
+  text-align: center;
+  padding: 40px;
+}
+
+.board-boot-mark,
+.board-disabled-mark {
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-sub);
+  animation: board-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes board-pulse {
+
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.board-boot-text {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.board-disabled-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.board-disabled-desc {
+  font-size: 15px;
+  color: var(--text-dim);
+  max-width: 480px;
+  line-height: 1.7;
+}
+
+/* ---------------------------------------------------------
+   オフライン帯（画面上部に控えめに表示）
+--------------------------------------------------------- */
+.board-offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--warn-dim);
+  border-bottom: 1px solid var(--warn-border);
+  color: var(--warn-strong);
+  font-size: 13.5px;
+  font-weight: 600;
+  transform: translateY(-100%);
+  transition: transform var(--dur-med) var(--ease);
+  pointer-events: none;
+}
+
+.board-offline-banner.is-visible {
+  transform: translateY(0);
+}
+
+.board-offline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn-strong);
+  animation: board-blink 1.1s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes board-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ---------------------------------------------------------
+   全体シェル
+--------------------------------------------------------- */
+.board-shell {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* ---------------------------------------------------------
+   ヘッダー
+--------------------------------------------------------- */
+.board-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 34px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.board-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.board-brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-sub);
+  flex-shrink: 0;
+}
+
+.board-brand-text {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.board-header-spacer {
+  flex: 1 1 auto;
+}
+
+.board-status-chips {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.board-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.board-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.board-chip.is-ok {
+  color: var(--ok-strong);
+  border-color: var(--ok-border);
+  background: var(--ok-dim);
+}
+
+.board-chip.is-ok .board-chip-dot {
+  background: var(--ok-strong);
+}
+
+.board-chip.is-warn {
+  color: var(--warn-strong);
+  border-color: var(--warn-border);
+  background: var(--warn-dim);
+}
+
+.board-chip.is-warn .board-chip-dot {
+  background: var(--warn-strong);
+  animation: board-blink 1.4s ease-in-out infinite;
+}
+
+.board-clock {
+  text-align: right;
+  flex-shrink: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+}
+
+.board-clock-time {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-clock-date {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ---------------------------------------------------------
+   スライド本体
+--------------------------------------------------------- */
+.board-slides {
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0;
+  padding: 30px 34px 8px;
+}
+
+.board-slide {
+  position: absolute;
+  inset: 0;
+  padding: 30px 34px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity var(--dur-med) var(--ease), transform var(--dur-med) var(--ease);
+}
+
+.board-slide.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  position: relative;
+}
+
+.board-slide.is-leaving {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.board-slide-title {
+  margin: 0 0 22px;
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.board-slide-title-sub {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* --- スライド1: 概観 --- */
+.board-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  flex-shrink: 0;
+}
+
+.board-tile {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  padding: 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.board-tile-value {
+  font-family: var(--font-mono);
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-tile-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.board-tile-warn:not(.is-zero) {
+  border-color: var(--warn-border);
+  background: var(--warn-dim);
+}
+
+.board-tile-warn:not(.is-zero) .board-tile-value {
+  color: var(--warn-strong);
+}
+
+/* 延滞中タイルは「注意(琥珀)」ではなく強い赤で示す */
+#tile-overdue-card:not(.is-zero) {
+  border-color: var(--overdue-solid);
+  background: var(--danger-dim);
+}
+
+#tile-overdue-card:not(.is-zero) .board-tile-value {
+  color: var(--overdue-solid);
+}
+
+/* 貸出中タイルは青 */
+#tile-inuse-card .board-tile-value {
+  color: var(--inuse-strong);
+}
+
+#tile-available-card .board-tile-value {
+  color: var(--ok-strong);
+}
+
+.board-tile-danger:not(.is-zero) {
+  border-color: var(--danger-border);
+  background: var(--danger-dim);
+}
+
+.board-tile-danger:not(.is-zero) .board-tile-value {
+  color: var(--danger-strong);
+}
+
+.board-overview-foot {
+  margin-top: 26px;
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.board-overview-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-sub);
+  transition: opacity var(--dur-med) var(--ease);
+}
+
+.board-overview-stat strong {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.board-dot-ok {
+  background: var(--ok-strong);
+}
+
+.board-dot-warn {
+  background: var(--warn-strong);
+}
+
+/* --- 端末別の利用・故障状況 --- */
+.board-device-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.board-device-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-left-width: 5px;
+  border-radius: var(--r-md);
+}
+
+.board-device-card.is-available {
+  border-left-color: var(--ok-strong);
+}
+
+.board-device-card.is-in-use {
+  border-left-color: var(--inuse);
+}
+
+.board-device-card.is-in-use .board-device-status {
+  color: var(--inuse-strong);
+}
+
+.board-device-card.is-broken {
+  border-left-color: var(--danger-strong);
+  background: var(--danger-dim);
+}
+
+.board-device-card.is-overdue {
+  border-color: var(--danger-border);
+}
+
+.board-device-card-top {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.board-device-id {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  /* 「延滞」バッジ付きでもIDが「CB-/01」と折り返さないようにする */
+  white-space: nowrap;
+}
+
+.board-device-status {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-sub);
+}
+
+.board-device-card.is-available .board-device-status {
+  color: var(--ok-strong);
+}
+
+.board-device-card.is-broken .board-device-status {
+  color: var(--danger-strong);
+}
+
+.board-device-overdue {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 3px 9px;
+  color: #fff;
+  background: var(--overdue-solid);
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* --- スライド3〜5: カードグリッド共通 ---
+   このボードは無人・タッチ操作なしの掲示画面のため、内部スクロールバー
+   （overflow-y:auto）を用意しても誰も操作できず、はみ出した分は事実上
+   「見えないまま」になってしまう。件数が多い時は is-compact でカードを
+   小さくして列数を増やし、それでも入りきらない場合は board.js 側で
+   件数を間引いて「+n件」の案内カードに置き換える（無言で切り捨てない）。 */
+.board-loans-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  align-content: start;
+  padding-bottom: 10px;
+}
+
+.board-loans-grid.is-compact {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.board-loans-grid.is-compact .board-loan-card,
+.board-loans-grid.is-compact .board-fail-card,
+.board-loans-grid.is-compact .board-bl-card {
+  padding: 10px 12px;
+  gap: 3px;
+}
+
+.board-loans-grid.is-compact .board-loan-name {
+  font-size: 16px;
+}
+
+.board-loans-grid.is-compact .board-loan-meta,
+.board-loans-grid.is-compact .board-fail-meta,
+.board-loans-grid.is-compact .board-bl-meta {
+  font-size: 12px;
+}
+
+.board-more-card {
+  background: var(--surface-sunken, var(--bg));
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 16px 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.board-more-card-count {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-sub);
+}
+
+.board-more-card-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.board-loan-card,
+.board-fail-card,
+.board-bl-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.board-loan-card {
+  border-left: 4px solid var(--inuse);
+}
+
+.board-loan-card.is-overdue {
+  border-color: var(--danger-border);
+  border-left-color: var(--overdue-solid);
+  background: var(--danger-dim);
+}
+
+.board-loan-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.board-loan-device {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+
+.board-loan-badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--overdue-solid);
+  padding: 2px 9px;
+  border-radius: var(--r-full);
+  letter-spacing: 0.02em;
+}
+
+.board-loan-name {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.3;
+  word-break: break-word;
+  color: var(--inuse-strong);
+}
+
+.board-loan-card.is-overdue .board-loan-name {
+  color: var(--danger-strong);
+}
+
+.board-loan-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.is-overdue-text {
+  color: var(--danger-strong);
+  font-weight: 700;
+}
+
+.board-fail-device {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.board-fail-meta {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.board-fail-card {
+  border-color: var(--danger-border);
+  background: var(--danger-dim);
+}
+
+.board-bl-name {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.board-bl-meta {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.board-bl-card {
+  border-color: var(--warn-border);
+  background: var(--warn-dim);
+}
+
+/* --- 空状態 --- */
+.board-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-dim);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------
+   フッター
+--------------------------------------------------------- */
+.board-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 14px 34px 18px;
+}
+
+.board-dots {
+  display: flex;
+  gap: 7px;
+}
+
+.board-dot-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: background var(--dur-med) var(--ease), transform var(--dur-med) var(--ease);
+}
+
+.board-dot-indicator.is-active {
+  background: var(--focus);
+  transform: scale(1.3);
+}
+
+.board-updated {
+  position: absolute;
+  right: 34px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------
+   小さめの拡張ディスプレイでも崩れないための縮小
+--------------------------------------------------------- */
+
+
+
+

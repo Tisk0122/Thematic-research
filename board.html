@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>貸出状況ボード｜端末貸出管理システム</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="img/icon.png" type="image/png">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/board.css">
+</head>
+
+<body data-theme="dark">
+
+  <!-- サーバーに一度も接続できていない間だけ表示する起動時オーバーレイ -->
+  <div class="board-boot" id="board-boot">
+    <div class="board-boot-mark">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+      </svg>
+    </div>
+    <div class="board-boot-text">貸出状況ボードを起動しています…</div>
+  </div>
+
+  <!-- 運用設定でボード表示自体がオフの場合に表示 -->
+  <div class="board-disabled" id="board-disabled" style="display:none;">
+    <div class="board-disabled-mark">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="4.9" y1="4.9" x2="19.1" y2="19.1" />
+      </svg>
+    </div>
+    <div class="board-disabled-title">サブモニター表示はオフになっています</div>
+    <div class="board-disabled-desc">管理画面「運用設定」→「サブモニター表示」から有効にできます。</div>
+  </div>
+
+  <!-- 接続が切れた時に画面全体を覆わず、控えめに知らせる帯 -->
+  <div class="board-offline-banner" id="board-offline-banner" role="status">
+    <span class="board-offline-dot"></span>
+    <span>サーバーへの接続を再試行しています…（最終取得: <span id="board-offline-since">-</span>）</span>
+  </div>
+
+  <div class="board-shell" id="board-shell" style="display:none;">
+
+    <!-- ============ 共通ヘッダー ============ -->
+    <header class="board-header">
+      <div class="board-brand">
+        <span class="board-brand-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </span>
+        <span class="board-brand-text">端末貸出状況ボード</span>
+      </div>
+
+      <div class="board-header-spacer"></div>
+
+      <div class="board-status-chips" id="board-status-chips">
+        <span class="board-chip" id="chip-arduino">
+          <span class="board-chip-dot"></span><span class="board-chip-label">施錠装置</span>
+        </span>
+        <span class="board-chip" id="chip-sync">
+          <span class="board-chip-dot"></span><span class="board-chip-label">スプレッドシート同期</span>
+        </span>
+      </div>
+
+      <div class="board-clock">
+        <div class="board-clock-time" id="board-clock-time">--:--</div>
+        <div class="board-clock-date" id="board-clock-date">----年--月--日（-）</div>
+      </div>
+    </header>
+
+    <!-- ============ スライド本体 ============ -->
+    <main class="board-slides" id="board-slides">
+
+      <!-- スライド1: 概観 -->
+      <section class="board-slide" data-slide="overview">
+        <h1 class="board-slide-title">今の状況</h1>
+        <div class="board-tiles">
+          <div class="board-tile" id="tile-inuse-card">
+            <div class="board-tile-value" id="tile-inuse">-</div>
+            <div class="board-tile-label">貸出中 / 全<span id="tile-total-devices">12</span>台</div>
+          </div>
+          <div class="board-tile" id="tile-available-card">
+            <div class="board-tile-value" id="tile-available">-</div>
+            <div class="board-tile-label">貸出可能</div>
+          </div>
+          <div class="board-tile board-tile-warn" id="tile-overdue-card">
+            <div class="board-tile-value" id="tile-overdue">-</div>
+            <div class="board-tile-label">延滞中</div>
+          </div>
+          <div class="board-tile board-tile-danger" id="tile-broken-card">
+            <div class="board-tile-value" id="tile-broken">-</div>
+            <div class="board-tile-label">故障中</div>
+          </div>
+        </div>
+        <div class="board-overview-foot">
+          <div class="board-overview-stat"><span class="board-dot board-dot-ok"></span>本日の貸出 <strong
+              id="ov-today-checkouts">-</strong>件</div>
+          <div class="board-overview-stat"><span class="board-dot board-dot-ok"></span>本日の返却 <strong
+              id="ov-today-returns">-</strong>件</div>
+          <div class="board-overview-stat" id="ov-today-late-wrap"><span class="board-dot board-dot-warn"></span>うち延滞返却
+            <strong id="ov-today-late">-</strong>件</div>
+        </div>
+      </section>
+
+      <!-- スライド2: 端末ごとの状態 -->
+      <section class="board-slide" data-slide="devices">
+        <h1 class="board-slide-title">端末別の状況 <span class="board-slide-title-sub" id="devices-count-sub"></span></h1>
+        <div class="board-device-grid" id="devices-grid"></div>
+        <div class="board-empty" id="devices-empty" style="display:none;">端末ごとの状態を取得できません</div>
+      </section>
+
+      <!-- スライド3: 貸出中一覧 -->
+      <section class="board-slide" data-slide="loans">
+        <h1 class="board-slide-title">貸出中の端末 <span class="board-slide-title-sub" id="loans-count-sub"></span></h1>
+        <div class="board-loans-grid" id="loans-grid">
+          <!-- JSで描画 -->
+        </div>
+        <div class="board-empty" id="loans-empty" style="display:none;">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+            <path d="m9 10 2 2 4-4" />
+          </svg>
+          <div>現在貸出中の端末はありません</div>
+        </div>
+      </section>
+
+      <!-- スライド4: 故障端末（データがある時のみ表示） -->
+      <section class="board-slide" data-slide="failures">
+        <h1 class="board-slide-title">故障端末 <span class="board-slide-title-sub" id="failures-count-sub"></span></h1>
+        <div class="board-loans-grid" id="failures-grid"></div>
+      </section>
+
+      <!-- スライド5: 貸出制限（件数のみ表示。氏名等の個人情報はサブモニターに出さない） -->
+      <section class="board-slide" data-slide="blacklist">
+        <h1 class="board-slide-title">貸出制限中</h1>
+        <div class="board-tiles" style="justify-content:center;">
+          <div class="board-tile board-tile-danger" style="max-width:280px;">
+            <div class="board-tile-value" id="blacklist-count-display">-</div>
+            <div class="board-tile-label">貸出制限中の利用者数</div>
+          </div>
+        </div>
+        <div class="board-empty" id="blacklist-empty" style="display:none;">
+          <div>現在、貸出制限中の利用者はいません</div>
+        </div>
+        <!-- 氏名・メールアドレス等の個人情報はサブモニターに表示しない。
+             詳細は管理画面「ブラックリスト」タブで確認してください。 -->
+      </section>
+
+    </main>
+
+    <!-- ============ フッター: スライド進行インジケータ ============ -->
+    <footer class="board-footer">
+      <div class="board-dots" id="board-dots"></div>
+      <div class="board-updated">最終更新 <span id="board-updated-at">-</span></div>
+    </footer>
+  </div>
+
+  <script src="js/board.js"></script>
+</body>
+
+</html>

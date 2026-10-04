@@ -1,0 +1,949 @@
+
+
+.checkout-step-count {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-500);
+  font-feature-settings: "tnum";
+  flex-shrink: 0;
+}
+
+.checkout-step-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 0 0 14px;
+}
+
+.step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gray-200);
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.step-dot.active {
+  background: var(--blue);
+  transform: scale(1.35);
+  /* 要素はステップ切替のたびinnerHTMLごと再生成されるため、
+     transitionではなくkeyframeで「登場」を表現する */
+}
+
+.step-dot.done {
+  background: var(--blue-mid);
+}
+
+/* ============================================================
+   フォームのステップ切替アニメーション（貸出ウィザード）
+   renderCheckoutStep() が表示行を切り替える際に付与するクラス。
+   「次へ」は右から、「戻る」は左からスライドイン。
+   ============================================================ */
+.form-row.step-anim-next {
+}
+.form-row.step-anim-back {
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-dot.active,
+  .form-row.step-anim-next,
+  .form-row.step-anim-back {
+    animation: none;
+  }}
+
+.rec-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(220, 38, 38, 0.07);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 100px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
+  margin: 0 0 8px;
+  line-height: 1.4;
+  flex-wrap: wrap;
+  /* コンテンツ幅に合わせる（フル幅・2行の大きなバナーにしない） */
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.rec-notice-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  flex-shrink: 0;
+  animation: rec-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes rec-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+.rec-notice-sub {
+  color: var(--red);
+  opacity: .8;
+  font-weight: 400;
+  font-size: 12px;
+  width: auto;
+  padding-left: 0;
+  margin-top: 0;
+}
+
+.rec-notice-sub::before {
+  content: '·';
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+.form-section {
+  padding: 0;
+  margin-bottom: 24px;
+}
+
+.form-card {
+  background: var(--surface);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 2px solid var(--gray-200); 
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border-bottom: 1px solid var(--gray-50);
+}
+
+.form-row:last-child {
+  border-bottom: none;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-500);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.form-label-hint {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--gray-500);
+  margin-left: 6px;
+}
+
+/* ステップの見出し（例：「生年月日を入力してください」）と重複しないよう、
+   項目名そのものは表示せず、入力例だけを添えるための単独ヒント。 */
+.form-hint-standalone {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gray-500);
+}
+
+.form-input {
+  width: 100%;
+  height: 56px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 16px;
+  padding: 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--gray-900);
+  background: var(--bg-subtle);
+  outline: none;
+  transition:
+    border-color 200ms ease,
+    box-shadow   200ms ease,
+    background   200ms ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* フォーカス中の十分な手がかり（枠線の色変更）は残しつつ、外側の glow を
+   重ねると入力欄が「光って見える」ため装飾過多になっていた。
+   キーボード操作の視認性は :focus-visible の枠線（下記）で担保し、
+   タップ中心のこの UI では glow を入れない。 */
+.form-input:focus {
+  border-color: var(--blue);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.form-input:focus-visible {
+  outline: 3px solid rgba(29, 78, 216, .55);
+  outline-offset: 1px;
+}
+
+.form-input::placeholder {
+  color: var(--gray-500);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.email-pattern-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.email-chip {
+  padding: 8px 16px;
+  border-radius: 100px;
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--gray-200);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.email-chip.active {
+  background: var(--blue-lt);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* ==========================================================================
+   学年選択（独立ステップ）
+   入力欄の上に小さく置くのではなく、「学年は？」と1画面丸ごと使って尋ね、
+   選んだら次のステップ（学籍番号入力）へ自動的に進む。
+   ========================================================================== */
+.grade-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.grade-select-grid .email-chip {
+  padding: 26px 16px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  border: 2px solid var(--gray-200);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gray-700);
+  text-align: center;
+  box-shadow: var(--shadow-xs);
+  transition: transform 150ms var(--ease), border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.grade-select-grid .email-chip:active {
+  transform: scale(0.96);
+}
+
+.grade-select-grid .email-chip.active {
+  background: var(--blue-lt);
+  border-color: var(--blue);
+  color: var(--blue);
+  box-shadow: var(--shadow-sm);
+}
+
+.email-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 16px;
+  padding: 0 16px;
+  transition: all 0.2s ease;
+}
+
+/* .form-input / .dob-input-group と同じく、タップ中心のキオスクでは
+   フォーカス中も glow を出さず枠線のみ変更する。 */
+.email-input-group:focus-within {
+  border-color: var(--blue);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.email-main-input:focus-visible {
+  outline: 3px solid rgba(29, 78, 216, .55);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.email-prefix, .email-suffix {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--gray-700);
+  white-space: nowrap;
+}
+
+.email-main-input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  text-align: center;
+  letter-spacing: 0.2em;
+  font-size: 24px !important;
+  font-family: var(--font-mono);
+  caret-color: var(--blue);
+}
+
+.email-input-group--full {
+  border-color: var(--green-mid) !important;
+  background: var(--green-lt) !important;
+}
+
+/* ==========================================================================
+   オンスクリーンキーパッド共通スタイル
+   （OS標準の画面キーボードの代わりに、学籍番号などの数字/英数字入力を
+   タップだけで完結させるための専用パネル。apw-keypad と統一感を持たせる）
+   ========================================================================== */
+
+.onkey-pad {
+  width: 100%;
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onkey-row {
+  display: flex;
+  gap: 8px;
+}
+
+.onkey-row--actions {
+  margin-top: 2px;
+}
+
+.onkey-key {
+  flex: 1;
+  height: 56px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 20px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--gray-900);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: transform 100ms ease, background 100ms ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  text-transform: none;
+}
+
+.onkey-key:active {
+  transform: scale(0.9);
+  background: var(--gray-100);
+}
+
+.onkey-key--del {
+  color: var(--red);
+  border-color: var(--red-mid, var(--gray-200));
+}
+
+.onkey-key--ghost {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+.onkey-key--wide {
+  flex: 1;
+}
+
+.onkey-pad--alnum .onkey-key {
+  font-size: 17px;
+  height: 52px;
+}
+
+/* ==========================================================================
+   名前入力用：ひらがな／カタカナ／ローマ字 切り替えタブ＋専用キーパッド
+   （OS標準の画面キーボードやIMEに頼らず、タップだけで名前を入力する）
+   ========================================================================== */
+
+.name-kbd-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.name-kbd-tab {
+  flex: 1;
+  height: 38px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-500);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 100ms ease, background 100ms ease, color 100ms ease, border-color 100ms ease;
+}
+
+.name-kbd-tab:active {
+  transform: scale(0.96);
+}
+
+.name-kbd-tab.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.onkey-pad--kana {
+  margin-top: 8px;
+}
+
+.onkey-pad--kana .onkey-row {
+  gap: 6px;
+}
+
+.onkey-pad--kana .onkey-key {
+  height: 52px;
+  font-size: 17px;
+  font-weight: 700;
+  border-radius: 11px;
+}
+
+.onkey-pad--kana .onkey-key--spacer {
+  visibility: hidden;
+  pointer-events: none;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+}
+
+/* 濁点(゛゜)・小文字(小)・全消去などの機能キーは、押し間違えると
+   直前の文字が意図せず変化/消失してしまうため、通常のかな入力キーと
+   はっきり区別できるよう背景色を分けて視認性を上げる。 */
+.onkey-pad--kana .onkey-key--func {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-600);
+  background: var(--bg-subtle);
+}
+
+.onkey-pad--kana .onkey-key--space {
+  flex: 3;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-600);
+  background: var(--bg-subtle);
+}
+
+/* 削除キーは他の機能キーよりさらに誤タップの影響が大きいため、
+   常に赤系の背景で強調し、他のキーと触感（見た目）で区別できるようにする。 */
+.onkey-pad--kana .onkey-key--del {
+  background: rgba(220, 38, 38, 0.06);
+}
+
+/* 全消去は「削除」よりさらに影響が大きい操作（入力済みの文字を
+   すべて失う）ため、独立した行だった頃と同じ危険度が伝わるよう、
+   他の機能キーより一段濃い枠線で目立たせて誤タップを防ぐ。 */
+.onkey-pad--kana .onkey-key--ghost {
+  border-color: var(--gray-300);
+  font-size: 12.5px;
+}
+
+/* 五十音表のわ行の空きマスに埋め込んだ「ん」「ー」。通常のかな文字
+   キーと同じ見た目でよいが、専用行を削った分、列の余白で紛れないよう
+   幅は通常キーと揃える（onkey-key の flex:1 をそのまま使う）。 */
+.onkey-pad--kana .onkey-key--inline-extra {
+  font-size: 17px;
+}
+
+/* わ行に埋め込んだ濁点(゛゜)キーも、他の機能キーと同様に背景色で
+   区別しつつ、五十音の文字キーと同じ列幅に収める。 */
+.onkey-pad--kana .onkey-key--inline-func {
+  font-size: 15px;
+}
+
+.onkey-pad--romaji .onkey-key {
+  font-size: 17px;
+  height: 52px;
+}
+
+/* 生年月日入力欄（数字キーパッド直接入力方式）。
+   見た目・挙動は学籍番号入力（.email-input-group）と統一している。 */
+.dob-input-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 16px;
+  padding: 0 16px;
+}
+
+/* キオスクはタップ中心のため、focus-within で glow を出すと
+   常に光ったように見える。枠線の色変更だけに留める
+   （.dob-main-input は枠線を持たないため、キーボード操作時は別途
+     :focus-visible のアウト線を出す）。 */
+.dob-input-group:focus-within {
+  border-color: var(--blue);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.dob-main-input:focus-visible {
+  outline: 3px solid rgba(29, 78, 216, .55);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.dob-input-group--full {
+  border-color: var(--green-mid) !important;
+  background: var(--green-lt) !important;
+}
+
+.dob-main-input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  text-align: center;
+  letter-spacing: 0.14em;
+  font-size: 26px !important;
+  font-family: var(--font-mono);
+  caret-color: var(--blue);
+}
+
+.btn-area {
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 手動完了ボタンの下に出る補足説明（例：ロック装置未接続時）。
+   以前は 11px / gray-400 で、白背景に対してコントラスト比が不足していたため
+   （WCAG AAの通常文字基準 4.5:1 を満たさない）、視認性を確保できる濃さ・サイズに調整。 */
+.door-manual-hint-box {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #991b1b;
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: left;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.door-manual-hint-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #dc2626;
+}
+
+.door-manual-hint {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--gray-600);
+  margin-top: 4px;
+  text-align: center;
+}
+
+.primary-btn {
+  width: 100%;
+  min-height: 64px;
+  border: none;
+  border-radius: 20px;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  letter-spacing: -0.01em;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 200ms cubic-bezier(0.2, 0, 0.2, 1),
+    opacity   200ms ease;
+  padding: 0 32px;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform, opacity;
+}
+
+.primary-btn:active:not(:disabled) {
+  transform: scale(.98);
+  opacity: .9;
+}
+
+.primary-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.primary-btn.blue {
+  background: var(--blue);
+  color: white;
+  box-shadow: var(--btn-blue-shadow);
+}
+
+.primary-btn.green {
+  background: var(--green);
+  color: white;
+  box-shadow: var(--btn-green-shadow);
+}
+
+.secondary-btn {
+  width: 100%;
+  min-height: 56px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--gray-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform var(--dur-fast) var(--ease),
+    opacity   var(--dur-fast) var(--ease);
+  padding: 0 24px;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform;
+}
+
+.secondary-btn:active {
+  transform: scale(.97);
+  opacity: .8;
+}
+
+.spinner {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.spinner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,.2);
+  border-top-color: rgba(255,255,255,.95);
+  border-right-color: rgba(255,255,255,.45);
+  will-change: transform;
+  animation: btn-spin 650ms linear infinite;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11000; 
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.dialog-card {
+  width: 100%;
+  max-width: 320px;
+  background: var(--surface);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  border: var(--card-border);
+}
+
+.dialog-content {
+  padding: 24px 20px 20px;
+  text-align: center;
+}
+
+.dialog-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 8px;
+}
+
+.dialog-msg {
+  font-size: 14px;
+  color: var(--gray-600);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.dialog-buttons {
+  display: flex;
+  border-top: 0.5px solid var(--gray-150);
+}
+
+.dialog-btn {
+  flex: 1;
+  height: 52px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 150ms;
+}
+
+.dialog-btn:active {
+  background: var(--gray-100);
+}
+
+.dialog-btn.ok {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.dialog-btn.cancel {
+  color: var(--gray-500);
+  border-right: 0.5px solid var(--gray-150);
+}
+
+.dialog-buttons.alert .dialog-btn.cancel {
+  display: none;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: var(--gray-300);
+  transition: .3s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+  box-shadow: var(--shadow-xs);
+}
+
+input:checked + .slider {
+  background-color: var(--blue);
+}
+
+input:checked + .slider:before {
+  transform: translateX(22px);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--blue);
+}
+
+#toast-container {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--header-h, 56px) + 14px);
+  transform: translateX(-50%);
+  z-index: 10500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px;
+  pointer-events: none;
+}
+
+.toast-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  color: var(--gray-900);
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, .10),
+    0 2px 7px rgba(15, 23, 42, .06);
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-10px) scale(.98);
+  transition:
+    transform 260ms cubic-bezier(.2, 1, .2, 1),
+    opacity   200ms ease;
+  will-change: transform, opacity;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toast-item.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.toast-item.hide {
+  opacity: 0;
+  transform: translateY(-8px) scale(.98);
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.toast-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.toast-item.success .toast-dot { background: var(--green); }
+.toast-item.error   .toast-dot { background: var(--red); }
+.toast-item.info    .toast-dot { background: var(--blue); }
+
+.toast-msg {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  word-break: break-word;
+  letter-spacing: -0.01em;
+}
+/* ============================================================
+   Arduino（施錠装置）接続状態バナー
+   ------------------------------------------------------------
+   画面上部に固定表示し、切断中は赤・再接続直後は緑で数秒間だけ
+   知らせる。読み込み中（loading-overlay表示中）はまだ本当の接続状態が
+   確定していない可能性があるため、body に is-app-ready が付くまでは
+   トランジションを無効化し、位置が一瞬で切り替わっても目立たないように
+   している（= 画面が読み込まれてから初めてアニメーションする）。
+   ============================================================ */
+.arduino-alert-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 700;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 12px 28px;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  color: #fff;
+  background: linear-gradient(135deg, var(--red) 0%, #a91d1d 100%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: none;
+  pointer-events: none;
+}
+body.is-app-ready .arduino-alert-bar {
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 320ms ease;
+}
+.arduino-alert-bar.is-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+/* バナー表示中はヘッダー等が隠れないよう、アプリ本体を押し下げる */
+body.has-arduino-alert .app {
+  padding-top: 64px;
+  transition: padding-top 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.arduino-alert-bar.is-reconnected {
+  background: linear-gradient(135deg, var(--green) 0%, #0f5c30 100%);
+}
+.arduino-alert-bar-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+}
+.arduino-alert-bar-text strong {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.arduino-alert-bar-text span {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.92;
+}
+.arduino-alert-bar .aab-icon {
+  flex-shrink: 0;
+  animation: aab-icon-pulse 1.6s ease-in-out infinite;
+}
+.arduino-alert-bar .aab-icon-ok {
+  flex-shrink: 0;
+  display: none;
+}
+.arduino-alert-bar.is-reconnected .aab-icon { display: none; }
+.arduino-alert-bar.is-reconnected .aab-icon-ok { display: block; animation: aab-icon-pop 400ms cubic-bezier(.34,1.56,.64,1); }
+@keyframes aab-icon-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@keyframes aab-icon-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arduino-alert-bar .aab-icon { animation: none; }
+  body.is-app-ready .arduino-alert-bar { transition: opacity 200ms ease; }}
