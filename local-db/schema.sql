@@ -124,3 +124,42 @@ CREATE TABLE IF NOT EXISTS email_queue (
   sent_at        TEXT NOT NULL DEFAULT '' -- 送信成功したら記録。30日後に自動削除(email_queue.js:pruneSentEmails)
 );
 CREATE INDEX IF NOT EXISTS idx_email_queue_pending ON email_queue(next_attempt_at) WHERE sent_at = '';
+
+-- リモート設定変更の依頼（GASの「郵便受け」から取得したもの）。
+-- 届いた依頼は自動では適用されず、教室PCの管理画面で承認（または却下）されて
+-- 初めて運用設定へ反映される。status:
+--   pending(承認待ち) / applied(全項目適用) / partial(一部適用) / rejected(却下)
+--   expired(期限切れ) / invalid(検証失敗) / cancelled(依頼者が取り消し)
+-- report_state は GAS へ最後に報告した状態（status と一致すれば報告済み）。
+CREATE TABLE IF NOT EXISTS remote_settings_requests (
+  id                 TEXT PRIMARY KEY,
+  created_at         TEXT NOT NULL,
+  created_by         TEXT NOT NULL DEFAULT '',
+  expires_at         TEXT NOT NULL,
+  note               TEXT NOT NULL DEFAULT '',
+  changes_json       TEXT NOT NULL DEFAULT '{}',
+  ignored_keys_json  TEXT NOT NULL DEFAULT '[]',
+  received_at        TEXT NOT NULL,
+  status             TEXT NOT NULL,
+  decided_at         TEXT NOT NULL DEFAULT '',
+  decided_by         TEXT NOT NULL DEFAULT '',
+  applied_keys_json  TEXT NOT NULL DEFAULT '[]',
+  auto_applied_json  TEXT NOT NULL DEFAULT '[]',
+  decision_note      TEXT NOT NULL DEFAULT '',
+  report_state       TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_remote_settings_status ON remote_settings_requests(status);
+
+-- リモート設定の受信モードと取得状況（1行のみ）。
+-- mode: 'approve' = 届いた依頼を承認待ちとして受け取る / 'off' = 受け取らない（ローカルのみで運用）
+-- locked_keys_json: 「ローカル固定」にした項目。遠隔依頼に含まれていても無視される。
+-- auto_keys_json: 承認なしで自動適用する項目（署名・許可リスト検証を通った依頼のみ）。既定はメンテナンスモードと貸出の一時休止。
+CREATE TABLE IF NOT EXISTS remote_settings_state (
+  id                INTEGER PRIMARY KEY CHECK (id = 1),
+  mode              TEXT NOT NULL DEFAULT 'approve',
+  locked_keys_json  TEXT NOT NULL DEFAULT '[]',
+  auto_keys_json    TEXT NOT NULL DEFAULT '["maintenanceMode","lendingSuspended","lendingSuspendedUntil"]',
+  last_poll_at      TEXT,
+  last_ok_at        TEXT,
+  last_error        TEXT
+);

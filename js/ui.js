@@ -1,7 +1,7 @@
 'use strict';
 
 let _navSeq = 0;
-let _sysSettings = { checkoutFields: 'email_dob', returnVerify: true, idleTimeoutEnabled: true, returnDeadlineHour: 16, returnDeadlineMinute: 0, logoutCameraCheckEnabled: true };
+let _sysSettings = { checkoutFields: 'email_dob', returnVerify: true, idleTimeoutEnabled: true, returnDeadlineHour: 16, returnDeadlineMinute: 0, logoutCameraCheckEnabled: true, lendingSuspended: false, lendingSuspendedUntil: '' };
 
 function dlog(...args) {
   if (_sysSettings.enableDebugLogs === true) console.log(...args);
@@ -585,7 +585,9 @@ function _updateActionCards() {
   const canOperate = online && serverOk && gasOk;
 
   const maint = !!_sysSettings.maintenanceMode;
-  const susp = !!_sysSettings.lendingSuspended;
+  const susp = typeof _isLendingSuspensionActive === 'function'
+    ? _isLendingSuspensionActive()
+    : !!_sysSettings.lendingSuspended;
 
   const checkoutCard = document.getElementById('action-checkout');
   const returnCard = document.getElementById('action-return');
@@ -599,7 +601,7 @@ function _updateActionCards() {
   // 空き0台のときも貸出は始められない（入力・録画に進んでから失敗するのを防ぐ）。
   const noStock = canOperate && !susp && !maint && arduinoOk && _getAvailableDeviceCount() <= 0;
   const checkoutDisabled = !canOperate || susp || maint || !arduinoOk || noStock;
-  const returnDisabled = !canOperate || susp || maint;
+  const returnDisabled = !canOperate || maint;
 
   if (checkoutCard) {
     checkoutCard.classList.toggle('disabled', checkoutDisabled);
@@ -608,7 +610,7 @@ function _updateActionCards() {
 
   if (returnCard) {
     returnCard.classList.toggle('disabled', returnDisabled);
-    _setActionCardBadge(returnBadge, canOperate, maint, susp, '返却休止中', false, false);
+    _setActionCardBadge(returnBadge, canOperate, maint, false, '返却休止中', false, false);
   }
 }
 

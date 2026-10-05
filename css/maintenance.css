@@ -64,6 +64,75 @@
   margin-bottom: 8px;
 }
 
+.lending-suspended-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(18px);
+}
+
+.lending-suspended-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 40px 32px 32px;
+  border: 1px solid var(--amber-border, var(--gray-200));
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.lending-suspended-icon {
+  display: flex;
+  width: 84px;
+  height: 84px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  border-radius: 22px;
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.lending-suspended-eyebrow {
+  margin-bottom: 8px;
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.lending-suspended-return-btn {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  margin-top: 24px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--primary, #2563eb);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lending-suspended-return-btn:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.lending-suspended-note {
+  margin-top: 12px;
+  color: var(--gray-600);
+  font-size: 12px;
+}
+
 /* ============================================================
    Arduino切断時のシステム停止画面
    ------------------------------------------------------------

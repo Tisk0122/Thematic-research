@@ -377,6 +377,7 @@ const VIEW_LOADERS = {
   gas: loadBackupsView,
   stats: loadStats,
   audit: loadAuditLog,
+  remote: () => loadRemoteSettingsView(),
   docs: loadDocsView
 };
 
@@ -1247,6 +1248,7 @@ async function refreshNavBadges() {
     if (fl && fl.failures) _failuresCache = fl.failures;
     updateFailuresBadge();
     updateNavBadges();
+    if (typeof refreshRemoteSettingsBadge === 'function') refreshRemoteSettingsBadge();
   } catch (e) { /* バッジは補助表示のため失敗しても無視 */ }
 }
 
@@ -2260,6 +2262,14 @@ function validateSettingsPayload(payload) {
   if (payload.teacherReportEnabled && !okEmailList(payload.teacherReportAddress)) {
     invalids.push(['set-teacher-report-address', '定期レポートの送信先メールアドレスを入力してください（例: teachers@g.miyazaki-c.ed.jp）']);
   }
+  if (payload.lendingSuspended && payload.lendingSuspendedUntil) {
+    const today = new Date();
+    const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const until = payload.lendingSuspendedUntil;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || until < todayValue) {
+      invalids.push(['set-lending-suspended-until', '貸出を休止する場合は、今日以降の終了日を指定してください']);
+    }
+  }
   invalids.forEach(([id, msg]) => {
     const el = document.getElementById(id);
     if (el) { el.classList.add('is-invalid'); el.title = msg; }
@@ -2420,6 +2430,8 @@ function populateSettingsForm(s) {
   const reoffRadio = document.querySelector(`input[name="set-bl-reoffense"][value="${s.blReoffense || 'double'}"]`);
   if (reoffRadio) reoffRadio.checked = true;
   document.getElementById('set-debug-logs').checked = !!s.enableDebugLogs;
+  document.getElementById('set-lending-suspended').checked = !!s.lendingSuspended;
+  document.getElementById('set-lending-suspended-until').value = s.lendingSuspendedUntil || '';
   document.getElementById('set-deadline-hour').value = s.returnDeadlineHour ?? 16;
   document.getElementById('set-deadline-minute').value = s.returnDeadlineMinute ?? 0;
   document.getElementById('set-grace-period').value = s.gracePeriodMinutes ?? 0;
@@ -2476,6 +2488,8 @@ function collectSettingsPayload() {
     blDuration: clampInt(document.getElementById('set-bl-duration').value, 1, 12, 1),
     blReoffense: reoffRadio ? reoffRadio.value : 'double',
     enableDebugLogs: document.getElementById('set-debug-logs').checked,
+    lendingSuspended: document.getElementById('set-lending-suspended').checked,
+    lendingSuspendedUntil: document.getElementById('set-lending-suspended-until').value,
     returnDeadlineHour: clampInt(document.getElementById('set-deadline-hour').value, 0, 23, 16),
     returnDeadlineMinute: clampInt(document.getElementById('set-deadline-minute').value, 0, 59, 0),
     gracePeriodMinutes: clampInt(document.getElementById('set-grace-period').value, 0, 60, 0),

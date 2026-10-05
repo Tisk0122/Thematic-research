@@ -82,7 +82,6 @@ function resetSyncPairing() {
   props.deleteProperty(SYNC_TOKEN_PROP_KEY);
   props.setProperty(SYNC_PAIRING_OPEN_PROP_KEY, String(Date.now() + PAIRING_OPEN_TTL_MS));
 }
-
 // トークン文字列を正規化する。文字列以外は空文字として扱い、
 // 前後の空白は除去する(空白付きのまま比較すると必ず不一致になる)。
 function _normalizeToken(value) {
@@ -228,6 +227,7 @@ const DEFAULT_SETTINGS = {
   blReoffense: 'double',
   maintenanceMode: false,
   lendingSuspended: false,
+  lendingSuspendedUntil: '',
   enableDebugLogs: false,
   returnDeadlineHour: 16,
   returnDeadlineMinute: 0,
@@ -295,7 +295,9 @@ function doPost(e) {
   try {
     let action, params;
     const ct = (e.postData && e.postData.type) ? e.postData.type : '';
-    if (ct.indexOf('application/json') !== -1) {
+    // text/plain は、USBで持ち運ぶ単体HTML(remote-settings.html)がブラウザの事前確認(CORSプリフライト)を
+    // 避けるために使う形式。本文はJSON。
+    if (ct.indexOf('application/json') !== -1 || ct.indexOf('text/plain') !== -1) {
       const body = JSON.parse(e.postData.contents);
       action = body.action || e.parameter.action;
       params = body;
@@ -308,7 +310,13 @@ function doPost(e) {
         }
       }
     }
-    result = _authorizeRequest(action, params) || dispatch(action, params);
+    // 依頼画面(USB用HTML)からの操作は、同期トークンではなく「操作キー」で認証する
+    // (各関数の先頭で検証。GETでは受け付けない)。
+    if (RS_OPERATOR_ACTIONS.indexOf(action) >= 0) {
+      result = dispatch(action, params);
+    } else {
+      result = _authorizeRequest(action, params) || dispatch(action, params);
+    }
   } catch (err) {
     result = { success: false, message: 'サーバーエラー: ' + err.message };
   }
@@ -323,6 +331,9 @@ function doGet(e) {
       success: false,
       message: 'このURLはAPIエンドポイントです。action パラメータを指定してください。'
     });
+  }
+  if (action === 'issueRemoteOperatorKey') {
+    return createJsonResponse({ success: false, message: 'キー発行はPOSTでのみ受け付けます。' });
   }
 
   let result;
@@ -364,6 +375,11 @@ function dispatch(action, params) {
     case 'sendTestEmail':      return sendTestEmail(params);
     case 'sendUserActionEmail': return sendUserActionEmail(params);
     case 'syncFromLocal':      return syncFromLocal(params);
+    case 'remoteSettingsSync': return remoteSettingsSync(params);
+    case 'remoteSettingsSubmit': return remoteSettingsSubmit(params);
+    case 'remoteSettingsStatus': return remoteSettingsStatus(params);
+    case 'remoteSettingsCancel': return remoteSettingsCancel(params);
+    case 'issueRemoteOperatorKey': return issueRemoteOperatorKeyApi(params);
     default:
       return { success: false, message: '不明なアクション: ' + action };
   }
@@ -459,6 +475,14 @@ function updateRemoteSettings(params) {
   }
 
   const merged = Object.assign({}, DEFAULT_SETTINGS, current, incoming);
+  if (incoming.lendingSuspendedUntil !== undefined && incoming.lendingSuspendedUntil !== '' &&
+      !_rsValidDateOnly(incoming.lendingSuspendedUntil)) {
+    return { success: false, message: '貸出休止期限は有効な日付で指定してください' };
+  }
+  if ((incoming.lendingSuspended !== undefined || incoming.lendingSuspendedUntil !== undefined) &&
+      _rsSuspensionValidation(merged)) {
+    return { success: false, message: _rsSuspensionValidation(merged) };
+  }
 
   const wrapper = {
     settings: merged,
@@ -684,6 +708,30 @@ function _replaceFailuresSheet(rows) {
   _formatFailuresSheet(sh);
 }
 
+function _rsValidDateOnly(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!match) return false;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function _rsSuspensionValidation(settings) {
+  if (!settings.lendingSuspended) return '';
+  const until = settings.lendingSuspendedUntil;
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return !until || until === 'unlimited' || (_rsValidDateOnly(until) && until >= today)
+    ? ''
+    : '貸出休止期限は今日以降の日付、または無期限で指定してください';
+}
+
+function _rsSuspensionActive(settings) {
+  if (!settings || !settings.lendingSuspended) return false;
+  const until = settings.lendingSuspendedUntil;
+  return !_rsValidDateOnly(until) ||
+    until >= Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
 function _modeBlockMessage(kind) {
   const current = getRemoteSettings();
   const settings = (current && current.settings) || DEFAULT_SETTINGS;
@@ -691,10 +739,13 @@ function _modeBlockMessage(kind) {
   if (settings.maintenanceMode) {
     return 'ただいまシステムメンテナンス中のため、貸出・返却はご利用いただけません。';
   }
-  if (settings.lendingSuspended) {
-    return kind === 'return'
-      ? '現在、端末の返却を休止しています。しばらくお待ちください。'
-      : '現在、端末の貸出を休止しています。しばらくお待ちください。';
+  if (_rsSuspensionActive(settings)) {
+    if (kind !== 'checkout') return null;
+    const until = settings.lendingSuspendedUntil;
+    const deadline = _rsValidDateOnly(until)
+      ? '（' + Number(until.slice(0, 4)) + '年' + Number(until.slice(5, 7)) + '月' + Number(until.slice(8, 10)) + '日まで）'
+      : '';
+    return '現在、端末の貸出を休止しています' + deadline + '。返却は通常どおりご利用いただけます。';
   }
   return null;
 }
@@ -3405,4 +3456,786 @@ function setup() {
   applySheetFormat(blackSh, SHEET_BLACKLIST);
   applySheetFormat(userSh, SHEET_USERS);
   applySheetFormat(failSh, SHEET_FAILURES);
+}
+
+// ============================================================
+// リモート設定（承認制の「郵便受け」）
+// ------------------------------------------------------------
+// 先生がスプレッドシートの「リモート設定入力」シートに変更したい値を書き、
+// メニュー「リモート設定 > 変更を教室PCへ依頼する」を実行すると、署名付きの
+// 依頼が「リモート設定依頼」シートに積まれる。教室PC(server.js)は外向きの
+// HTTPS(remoteSettingsSync)で定期的にそれを取りに行き、「承認待ち」として
+// 保管する。運用設定へ反映されるのは、教室PCの管理画面で管理者が項目ごとに
+// 承認した場合だけ。却下・無視すれば教室PCの設定はそのままで変わらない。
+//
+// 安全の仕組み:
+// - 依頼の登録はスプレッドシートの編集者がメニューから行う操作のみ。WebアプリURLから
+//   依頼を作る入口は無い。取得(remoteSettingsSync)もSYNC_TOKENで認証される。
+// - 依頼にはSYNC_TOKENを鍵にしたHMAC署名を付け、教室PC側で検証する
+//   (シートのJSONを手で書き換えると署名が合わず破棄される)。
+// - リモートで変えられるのは RS_SCHEMA の項目だけ。local-db/remote_settings.js の
+//   REMOTE_SCHEMA と必ず同じ内容にすること(テストで一致を検証している)。
+// - 依頼は既定7日で期限切れになる。
+// ============================================================
+const SHEET_RS_INPUT = 'リモート設定入力';
+const SHEET_RS_REQUESTS = 'リモート設定依頼';
+const RS_VALID_DAYS = 7;
+const RS_MAX_OUTSTANDING = 5;
+const RS_MAX_KEYS = 40;
+const RS_REQ_COLS = 12; // A..L
+// 依頼シートの列番号(1始まり)
+const RS_COL = { id: 1, created: 2, by: 3, note: 4, summary: 5, stateLabel: 6, decidedAt: 7, decidedBy: 8, result: 9, expires: 10, json: 11, state: 12 };
+const RS_STATE_LABELS = {
+  sent: '送信待ち（教室PCがまだ取得していません）',
+  received: '承認待ち（教室PCに届いています）',
+  applied: '承認・適用済み',
+  partial: '一部のみ適用',
+  rejected: '却下（教室PCの設定は変更なし）',
+  expired: '期限切れ',
+  invalid: '教室PCで検証に失敗',
+  cancel_requested: '取り消し依頼中',
+  cancelled: '取り消し済み'
+};
+const RS_OPEN_STATES = ['sent', 'received', 'cancel_requested'];
+
+const RS_SCHEMA = {
+  maintenanceMode:           { label: 'メンテナンスモード', group: '貸出の制御', type: 'bool' },
+  lendingSuspended:          { label: '貸出の一時休止', group: '貸出の制御', type: 'bool' },
+  lendingSuspendedUntil:     { label: '貸出休止の終了日', group: '貸出の制御', type: 'date' },
+  returnDeadlineHour:        { label: '返却期限（時）', group: '返却期限', type: 'int', min: 0, max: 23, unit: '時' },
+  returnDeadlineMinute:      { label: '返却期限（分）', group: '返却期限', type: 'int', min: 0, max: 59, unit: '分' },
+  gracePeriodMinutes:        { label: '猶予時間', group: '返却期限', type: 'int', min: 0, max: 60, unit: '分' },
+  blThreshold:               { label: '延滞制限のしきい値', group: '延滞・制限', type: 'int', min: 1, max: 10, unit: '回' },
+  blDuration:                { label: '制限期間', group: '延滞・制限', type: 'int', min: 1, max: 12, unit: 'か月' },
+  blReoffense:               { label: '再犯時の扱い', group: '延滞・制限', type: 'enum',
+                               options: [{ value: 'double', label: '期間を2倍にする' }, { value: 'permanent', label: '無期限にする' }] },
+  returnVerify:              { label: '返却時の本人確認', group: '貸出・返却', type: 'bool' },
+  checkoutFields:            { label: '貸出時の入力項目', group: '貸出・返却', type: 'enum',
+                               options: [{ value: 'all', label: '全項目' }, { value: 'name', label: '名前のみ' }, { value: 'email_dob', label: 'メールアドレスと生年月日' }] },
+  emailPatterns:             { label: '生徒メールアドレス形式', group: '貸出・返却', type: 'patternList', maxItems: 20, autoApplyAllowed: false },
+  logoutCameraCheckEnabled:  { label: '返却時のログアウト確認（カメラ自動）', group: '貸出・返却', type: 'bool' },
+  deviceRestMinutes:         { label: '端末の充電待ち時間', group: '貸出・返却', type: 'int', min: 0, max: 240, unit: '分' },
+  idleTimeoutEnabled:        { label: '無操作タイムアウト', group: '貸出・返却', type: 'bool' },
+  recordingRetentionEnabled: { label: '録画の自動削除', group: '録画', type: 'bool' },
+  recordingRetentionDays:    { label: '録画の保存日数', group: '録画', type: 'int', min: 1, max: 365, unit: '日' },
+  notifyEmailEnabled:        { label: '即時アラートメール', group: '通知', type: 'bool' },
+  notifyEmailAddress:        { label: '即時アラートの宛先', group: '通知', type: 'emailList', maxItems: 10, autoApplyAllowed: false },
+  notifyOnOverdue:           { label: '延滞発生時に通知', group: '通知', type: 'bool' },
+  notifyOnFailure:           { label: '故障報告時に通知', group: '通知', type: 'bool' },
+  notifyOnBlacklist:         { label: 'ブラックリスト登録時に通知', group: '通知', type: 'bool' },
+  teacherReportEnabled:      { label: '先生向け定期レポート', group: '通知', type: 'bool' },
+  teacherReportAddress:      { label: '定期レポートの宛先', group: '通知', type: 'emailList', maxItems: 10, autoApplyAllowed: false },
+  teacherReportTimes:        { label: '定期レポートの送信時刻', group: '通知', type: 'timeList', maxItems: 6 },
+  notifyUserOnCheckout:      { label: '貸出完了メール（生徒宛）', group: '通知', type: 'bool' },
+  notifyUserOnReturn:        { label: '返却完了メール（生徒宛）', group: '通知', type: 'bool' },
+  boardEnabled:              { label: '貸出状況ボードの表示', group: 'ボード', type: 'bool' },
+  boardSlideIntervalSec:     { label: 'ボードの表示時間', group: 'ボード', type: 'int', min: 3, max: 60, unit: '秒' },
+  boardShowBlacklist:        { label: 'ボードに制限中の利用者を表示', group: 'ボード', type: 'bool' },
+  doorUnlockDurations:       { label: '扉ごとの解錠時間', group: '端末・セキュリティ', type: 'intList', count: 12, min: 100, max: 15000, unit: 'ms', autoApplyAllowed: false },
+  enableDebugLogs:           { label: 'デバッグログ', group: 'その他', type: 'bool' }
+};
+
+const RS_TRUE_WORDS = ['true', '1', 'on', 'yes', 'はい', 'オン', '有効', '☑', '✓'];
+const RS_FALSE_WORDS = ['false', '0', 'off', 'no', 'いいえ', 'オフ', '無効', '☐'];
+
+// local-db/remote_settings.js の normalizeValue と同じ規則。
+function _rsNormalize(def, raw) {
+  if (!def) return { ok: false, error: '許可されていない項目です' };
+  if (def.type === 'bool') {
+    if (typeof raw === 'boolean') return { ok: true, value: raw };
+    const word = String(raw == null ? '' : raw).trim().toLowerCase();
+    if (RS_TRUE_WORDS.indexOf(word) >= 0) return { ok: true, value: true };
+    if (RS_FALSE_WORDS.indexOf(word) >= 0) return { ok: true, value: false };
+    return { ok: false, error: 'オン/オフ（TRUE/FALSE）で指定してください' };
+  }
+  if (def.type === 'int') {
+    if (typeof raw === 'boolean' || raw === '' || raw == null) return { ok: false, error: '数値で指定してください' };
+    const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+    if (!isFinite(n) || Math.floor(n) !== n) return { ok: false, error: '整数で指定してください' };
+    if (n < def.min || n > def.max) return { ok: false, error: def.min + '〜' + def.max + 'の範囲で指定してください' };
+    return { ok: true, value: n };
+  }
+  if (def.type === 'date') {
+    const value = String(raw == null ? '' : raw).trim();
+    if (!value || value.toLowerCase() === 'unlimited') return { ok: true, value: 'unlimited' };
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return { ok: false, error: '日付を YYYY-MM-DD 形式で指定してください' };
+    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+      return { ok: false, error: '実在する日付を指定してください' };
+    }
+    return { ok: true, value: value };
+  }
+  if (def.type === 'enum') {
+    const s = String(raw == null ? '' : raw).trim();
+    const hit = def.options.filter(function (o) { return o.value === s || o.label === s; })[0];
+    if (!hit) return { ok: false, error: '次のいずれかで指定してください: ' + def.options.map(function (o) { return o.value; }).join(' / ') };
+    return { ok: true, value: hit.value };
+  }
+  if (def.type === 'timeList') {
+    const parts = String(raw == null ? '' : raw).split(/[,、\s]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (parts.length === 0) return { ok: false, error: '時刻を1つ以上指定してください（例: 08:30,16:30）' };
+    if (parts.length > def.maxItems) return { ok: false, error: '時刻は' + def.maxItems + '個までです' };
+    const out = [];
+    for (let i = 0; i < parts.length; i++) {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(parts[i]);
+      if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return { ok: false, error: '時刻の形式が不正です: ' + parts[i] + '（HH:MM）' };
+      const hhmm = ('0' + m[1]).slice(-2) + ':' + m[2];
+      if (out.indexOf(hhmm) < 0) out.push(hhmm);
+    }
+    return { ok: true, value: out.sort().join(',') };
+  }
+  if (def.type === 'emailList') {
+    const value = String(raw == null ? '' : raw).trim();
+    if (value.toUpperCase() === 'CLEAR') return { ok: true, value: '' };
+    if (!value) return { ok: false, error: 'メールアドレスを入力するか、空にする場合は CLEAR と入力してください' };
+    const emails = value.split(',').map(function (email) { return email.trim(); });
+    const validEmail = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
+    if (emails.length > def.maxItems || emails.some(function (email) { return !validEmail.test(email); })) {
+      return { ok: false, error: '有効なメールアドレスをカンマ区切りで指定してください（最大' + def.maxItems + '件）' };
+    }
+    return { ok: true, value: emails.join(',') };
+  }
+  if (def.type === 'intList') {
+    const values = Array.isArray(raw) ? raw : typeof raw === 'string'
+      ? raw.split(/[,、\s]+/).filter(Boolean).map(Number) : null;
+    if (!values || values.length !== def.count ||
+        values.some(function (value) { return typeof value !== 'number' || Math.floor(value) !== value || value < def.min || value > def.max; })) {
+      return { ok: false, error: def.count + '個の整数（' + def.min + '〜' + def.max + def.unit + '）で指定してください' };
+    }
+    return { ok: true, value: values.slice() };
+  }
+  if (def.type === 'patternList') {
+    let source = raw;
+    if (typeof source === 'string') {
+      try { source = JSON.parse(source); } catch (_) { source = null; }
+    }
+    if (!Array.isArray(source) || source.length < 1 || source.length > def.maxItems) {
+      return { ok: false, error: 'メール形式を1〜' + def.maxItems + '件で指定してください' };
+    }
+    const labels = Object.create(null);
+    const patterns = [];
+    for (let i = 0; i < source.length; i++) {
+      const pattern = source[i];
+      if (!pattern || typeof pattern !== 'object' || Array.isArray(pattern) ||
+          typeof pattern.label !== 'string' || !pattern.label.trim() || pattern.label.length > 40 ||
+          typeof pattern.template !== 'string' || pattern.template.length > 254 ||
+          (pattern.template.match(/\{\{input\}\}/g) || []).length !== 1 ||
+          !Number.isInteger(Number(pattern.length)) || Number(pattern.length) < 1 || Number(pattern.length) > 10 ||
+          ['digits', 'text'].indexOf(pattern.inputType) < 0 ||
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pattern.template.replace('{{input}}', '1234'))) {
+        return { ok: false, error: '表示名・メール形式・桁数または入力種別が不正です' };
+      }
+      const label = pattern.label.trim();
+      if (labels[label]) return { ok: false, error: 'メール形式の表示名は重複できません' };
+      labels[label] = true;
+      patterns.push({ label: label, template: pattern.template, length: Number(pattern.length), inputType: pattern.inputType });
+    }
+    return { ok: true, value: patterns };
+  }
+  return { ok: false, error: '未対応の型です' };
+}
+
+// 画面表示用。設定値(wire値)を人が読む形に直す。
+function _rsDisplay(def, wire) {
+  if (wire === undefined || wire === null || wire === '') return '（未設定）';
+  if (def.type === 'bool') return wire ? 'オン' : 'オフ';
+  if (def.type === 'date' && wire === 'unlimited') return '無期限';
+  if (def.type === 'date' && _rsValidDateOnly(wire)) {
+    return Number(wire.slice(0, 4)) + '年' + Number(wire.slice(5, 7)) + '月' + Number(wire.slice(8, 10)) + '日まで';
+  }
+  if (def.type === 'enum') {
+    const hit = def.options.filter(function (o) { return o.value === wire; })[0];
+    return hit ? hit.label : String(wire);
+  }
+  if (def.type === 'int') return String(wire) + (def.unit || '');
+  if (def.type === 'intList' || def.type === 'patternList') return JSON.stringify(wire);
+  return String(wire);
+}
+
+// 現在値(ローカルから同期された設定)を wire値に直す
+function _rsWireFromSetting(def, stored) {
+  if (def.type === 'timeList') return Array.isArray(stored) ? stored.join(',') : String(stored == null ? '' : stored);
+  if (def.type === 'date' && !stored) return 'unlimited';
+  return stored;
+}
+
+function _rsSameWireValue(a, b) {
+  if ((a && typeof a === 'object') || (b && typeof b === 'object')) return JSON.stringify(a) === JSON.stringify(b);
+  return a === b;
+}
+
+function _rsCanonicalValue(value) {
+  return value && typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+// local-db/remote_settings.js の canonicalMessage と完全に同じ文字列を作る。
+function _rsCanonicalMessage(r) {
+  const changes = r.changes || {};
+  const lines = Object.keys(changes).sort().map(function (k) {
+    return k + '=' + (typeof changes[k]) + ':' + _rsCanonicalValue(changes[k]);
+  });
+  return ['rs1', r.id, r.createdAt, r.expiresAt, r.createdBy || ''].concat(lines).join('\n');
+}
+
+function _rsSign(token, r) {
+  const bytes = Utilities.computeHmacSha256Signature(_rsCanonicalMessage(r), String(token).trim());
+  return bytes.map(function (b) { return ('0' + ((b < 0 ? b + 256 : b) & 0xff).toString(16)).slice(-2); }).join('');
+}
+
+// 入力シートの行 [[key, group, label, current, newValue, hint], ...] から
+// 依頼する変更を取り出す。currentSettings はローカルから同期済みの運用設定。
+// 戻り値: { changes, errors, unchanged }
+function _rsCollectChanges(rows, currentSettings) {
+  const changes = {};
+  const errors = [];
+  const unchanged = [];
+  (rows || []).forEach(function (row) {
+    const key = String(row[0] || '').trim();
+    const raw = row[4];
+    if (raw === '' || raw === null || raw === undefined) return; // 入力なし = 変更しない
+    const def = RS_SCHEMA[key];
+    if (!def) { errors.push(key + ': 許可されていない項目です'); return; }
+    const n = _rsNormalize(def, raw);
+    if (!n.ok) { errors.push(def.label + ': ' + n.error); return; }
+    const cur = currentSettings ? _rsWireFromSetting(def, currentSettings[key]) : undefined;
+    if (_rsSameWireValue(cur, n.value)) { unchanged.push(def.label); return; }
+    changes[key] = n.value;
+  });
+  return { changes: changes, errors: errors, unchanged: unchanged };
+}
+
+function _rsIso(v) {
+  if (v instanceof Date) return v.toISOString();
+  return String(v == null ? '' : v);
+}
+
+function _rsFmt(iso) {
+  const t = Date.parse(iso);
+  if (!isFinite(t)) return String(iso || '');
+  return Utilities.formatDate(new Date(t), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+}
+
+function _rsSummary(changes, currentSettings) {
+  return Object.keys(changes).map(function (k) {
+    const def = RS_SCHEMA[k];
+    const cur = currentSettings ? _rsWireFromSetting(def, currentSettings[k]) : undefined;
+    return def.label + ': ' + _rsDisplay(def, cur) + ' → ' + _rsDisplay(def, changes[k]);
+  }).join('\n');
+}
+
+// ---- シート ----
+function _rsRequestSheet() {
+  const ss = getSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_RS_REQUESTS);
+  if (sh) return sh;
+  sh = ss.insertSheet(SHEET_RS_REQUESTS);
+  sh.appendRow(['依頼ID', '依頼日時', '依頼者', 'メモ', '変更内容', '状態', '決定日時', '決定者', '結果', '有効期限', '依頼データ（編集禁止）', '状態コード']);
+  sh.setFrozenRows(1);
+  sh.getRange(1, 1, 1, RS_REQ_COLS).setFontWeight('bold').setBackground('#1e3a8a').setFontColor('#ffffff');
+  sh.getRange(2, 1, 998, RS_REQ_COLS).setNumberFormat('@'); // 日時文字列を日付へ自動変換させない
+  sh.setColumnWidth(RS_COL.summary, 420);
+  sh.setColumnWidth(RS_COL.stateLabel, 260);
+  sh.hideColumns(RS_COL.json, 2);
+  sh.setTabColor('#7c3aed');
+  return sh;
+}
+
+function _rsReadRequests(sh) {
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  const start = Math.max(2, last - 299); // 直近300件まで
+  const values = sh.getRange(start, 1, last - start + 1, RS_REQ_COLS).getValues();
+  return values.map(function (v, i) { return { row: start + i, v: v }; });
+}
+
+function _rsSetState(sh, row, state, info) {
+  info = info || {};
+  const autoDone = state === 'applied' && String(info.decidedBy || '').indexOf('自動適用') === 0;
+  sh.getRange(row, RS_COL.stateLabel).setValue(autoDone ? '自動適用済み（承認不要の項目）' : (RS_STATE_LABELS[state] || state));
+  sh.getRange(row, RS_COL.state).setValue(state);
+  if (info.decidedAt !== undefined) sh.getRange(row, RS_COL.decidedAt).setValue(info.decidedAt ? _rsFmt(info.decidedAt) : '');
+  if (info.decidedBy !== undefined) sh.getRange(row, RS_COL.decidedBy).setValue(info.decidedBy || '');
+  if (info.result !== undefined) sh.getRange(row, RS_COL.result).setValue(info.result || '');
+}
+
+function _rsCurrentSettings() {
+  const r = getRemoteSettings();
+  const settings = (r && r.success && r.settings) ? Object.assign({}, r.settings) : {};
+  if (settings.lendingSuspended && _rsValidDateOnly(settings.lendingSuspendedUntil) &&
+      settings.lendingSuspendedUntil < Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')) {
+    settings.lendingSuspended = false;
+  }
+  return settings;
+}
+
+// 入力シートを（なければ作成して）整え、現在値を最新にする。
+function refreshRemoteSettingsInputSheet() {
+  const ss = getSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_RS_INPUT);
+  const fresh = !sh;
+  if (!sh) sh = ss.insertSheet(SHEET_RS_INPUT);
+  const current = _rsCurrentSettings();
+  const keys = Object.keys(RS_SCHEMA);
+  const header = ['項目キー', '分類', '項目名', '現在値（教室PCから同期）', '新しい値（変えたい項目だけ入力）', '入力できる値'];
+  const rows = keys.map(function (k) {
+    const def = RS_SCHEMA[k];
+    let hint = '';
+    if (def.type === 'bool') hint = 'TRUE（オン） / FALSE（オフ）';
+    else if (def.type === 'int') hint = def.min + '〜' + def.max + (def.unit ? '（' + def.unit + '）' : '');
+    else if (def.type === 'date') hint = 'YYYY-MM-DD（指定日まで）または unlimited（無期限）';
+    else if (def.type === 'enum') hint = def.options.map(function (o) { return o.value + '＝' + o.label; }).join(' / ');
+    else if (def.type === 'timeList') hint = '24時間表記をカンマ区切り（例: 08:30,16:30）最大' + def.maxItems + '個';
+    return [k, def.group, def.label, _rsDisplay(def, _rsWireFromSetting(def, current[k])), '', hint];
+  });
+  // 既に入力済みの「新しい値」は更新で消さない
+  const prev = {};
+  if (!fresh && sh.getLastRow() >= 2) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().forEach(function (r) { prev[String(r[0])] = r[4]; });
+  }
+  rows.forEach(function (r) { if (prev[r[0]] !== undefined && prev[r[0]] !== '') r[4] = prev[r[0]]; });
+
+  sh.clear();
+  sh.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold').setBackground('#1e3a8a').setFontColor('#ffffff');
+  sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+  sh.setFrozenRows(1);
+  sh.setColumnWidth(1, 190); sh.setColumnWidth(2, 100); sh.setColumnWidth(3, 260);
+  sh.setColumnWidth(4, 190); sh.setColumnWidth(5, 220); sh.setColumnWidth(6, 420);
+  sh.getRange(2, 1, rows.length, 4).setBackground('#f1f5f9');
+  sh.getRange(2, 5, rows.length, 1).setBackground('#fef9c3');
+  sh.getRange(2, 5, rows.length, 1).setNumberFormat('@');
+  keys.forEach(function (k, i) {
+    const def = RS_SCHEMA[k];
+    const cell = sh.getRange(i + 2, 5);
+    if (def.type === 'bool') {
+      cell.setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['TRUE', 'FALSE'], true).setAllowInvalid(false).build());
+    } else if (def.type === 'enum') {
+      cell.setDataValidation(SpreadsheetApp.newDataValidation()
+        .requireValueInList(def.options.map(function (o) { return o.value; }), true).setAllowInvalid(false).build());
+    }
+  });
+  sh.setTabColor('#7c3aed');
+  try { SpreadsheetApp.getActive().toast('入力シートを更新しました。変えたい項目の「新しい値」だけ入力してください。', 'リモート設定', 6); } catch (e) { }
+}
+
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi().createMenu('リモート設定')
+      .addItem('入力シートを準備・現在値を更新', 'refreshRemoteSettingsInputSheet')
+      .addItem('変更を教室PCへ依頼する', 'submitRemoteSettingsRequest')
+      .addItem('未処理の依頼を取り消す', 'cancelRemoteSettingsRequests')
+      .addSeparator()
+      .addItem('USB用の操作キーを発行', 'issueRemoteOperatorKeyFromMenu')
+      .addItem('操作キーを失効', 'revokeRemoteOperatorKeyFromMenu')
+      .addToUi();
+  } catch (e) { /* UIが使えない実行環境では何もしない */ }
+}
+
+// 依頼を作ってシートに積む(UI非依存の中核)。署名・検証を含む。
+// 戻り値: { success, id?, message }
+function _rsCreateRequest(changes, note, createdBy, token, nowMs) {
+  const keys = Object.keys(changes || {});
+  if (keys.length === 0) return { success: false, message: '変更する項目がありません' };
+  if (keys.length > RS_MAX_KEYS) return { success: false, message: '一度に依頼できる項目は' + RS_MAX_KEYS + '個までです' };
+  if (!token) return { success: false, message: 'GASがまだ教室PCとペアリングされていません。resetSyncPairing() を実行してください。' };
+  const sh = _rsRequestSheet();
+  const open = _rsReadRequests(sh).filter(function (r) { return RS_OPEN_STATES.indexOf(String(r.v[RS_COL.state - 1])) >= 0; });
+  if (open.length >= RS_MAX_OUTSTANDING) {
+    return { success: false, message: '未処理の依頼が' + open.length + '件あります。教室PCで処理されるか、取り消してから新しい依頼を作成してください。' };
+  }
+  const now = new Date(nowMs || Date.now());
+  const req = {
+    id: 'RS-' + Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMMddHHmmss') + '-' + Utilities.getUuid().replace(/-/g, '').slice(0, 6),
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + RS_VALID_DAYS * 24 * 3600 * 1000).toISOString(),
+    createdBy: createdBy || '',
+    note: String(note || '').slice(0, 500),
+    changes: changes
+  };
+  req.signature = _rsSign(token, req);
+  const current = _rsCurrentSettings();
+  const row = [req.id, _rsFmt(req.createdAt), req.createdBy, req.note, _rsSummary(changes, current),
+    RS_STATE_LABELS.sent, '', '', '', _rsFmt(req.expiresAt), JSON.stringify(req), 'sent'];
+  sh.appendRow(row);
+  return { success: true, id: req.id, message: '依頼を登録しました' };
+}
+
+function submitRemoteSettingsRequest() {
+  const ui = SpreadsheetApp.getUi();
+  const input = getSpreadsheet().getSheetByName(SHEET_RS_INPUT);
+  if (!input || input.getLastRow() < 2) {
+    ui.alert('先に「リモート設定 > 入力シートを準備・現在値を更新」を実行してください。');
+    return;
+  }
+  const rows = input.getRange(2, 1, input.getLastRow() - 1, 6).getValues();
+  const current = _rsCurrentSettings();
+  const col = _rsCollectChanges(rows, current);
+  if (col.errors.length > 0) {
+    ui.alert('入力に誤りがあります', col.errors.join('\n'), ui.ButtonSet.OK);
+    return;
+  }
+  if (Object.keys(col.changes).length === 0) {
+    ui.alert('現在値から変わる項目がありません。' + (col.unchanged.length ? '\n（現在値と同じ: ' + col.unchanged.join('、') + '）' : ''));
+    return;
+  }
+  if (col.changes.lendingSuspended === true &&
+      !Object.prototype.hasOwnProperty.call(col.changes, 'lendingSuspendedUntil')) {
+    col.changes.lendingSuspendedUntil = _rsWireFromSetting(RS_SCHEMA.lendingSuspendedUntil, current.lendingSuspendedUntil);
+  }
+  if (col.changes.lendingSuspended !== undefined || col.changes.lendingSuspendedUntil !== undefined) {
+    const suspensionError = _rsSuspensionValidation(Object.assign({}, current, col.changes));
+    if (suspensionError) { ui.alert(suspensionError); return; }
+  }
+  const res = ui.prompt('教室PCへ依頼する内容の確認',
+    _rsSummary(col.changes, current) +
+    '\n\n※ 教室PCの管理画面で承認されるまで、設定は変わりません。\nメモ（任意。承認画面に表示されます）:',
+    ui.ButtonSet.OK_CANCEL);
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+
+  const email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '';
+  const created = _rsCreateRequest(col.changes, res.getResponseText(), email, _currentSyncToken());
+  if (!created.success) { ui.alert(created.message); return; }
+  // 依頼した分の入力欄を空に戻す
+  const keys = rows.map(function (r) { return String(r[0]); });
+  Object.keys(col.changes).forEach(function (k) {
+    const i = keys.indexOf(k);
+    if (i >= 0) input.getRange(i + 2, 5).clearContent();
+  });
+  ui.alert('依頼を登録しました', '教室PCが次に確認するとき（通常3分以内）に届き、管理画面で承認待ちになります。\n依頼ID: ' + created.id + '\n状況は「' + SHEET_RS_REQUESTS + '」シートで確認できます。', ui.ButtonSet.OK);
+}
+
+function cancelRemoteSettingsRequests() {
+  const ui = SpreadsheetApp.getUi();
+  const ok = ui.alert('未処理の依頼を取り消します', '承認待ちの依頼をすべて取り消します。よろしいですか？', ui.ButtonSet.OK_CANCEL);
+  if (ok !== ui.Button.OK) return;
+  const n = _rsCancelOpen();
+  ui.alert(n > 0 ? n + '件の取り消しを依頼しました（教室PCが次に確認したときに反映されます）。' : '取り消せる依頼はありません。');
+}
+
+function _rsCancelOpen(onlyId) {
+  const sh = _rsRequestSheet();
+  let n = 0;
+  _rsReadRequests(sh).forEach(function (r) {
+    const st = String(r.v[RS_COL.state - 1]);
+    if (onlyId && String(r.v[RS_COL.id - 1]) !== String(onlyId)) return;
+    if (st === 'sent' || st === 'received') { _rsSetState(sh, r.row, 'cancel_requested'); n++; }
+  });
+  return n;
+}
+
+// 教室PCからの定期アクセス。報告(results)を反映し、未取得の依頼と取り消し対象を返す。
+const RS_REPORT_STATES = ['received', 'applied', 'partial', 'rejected', 'expired', 'invalid', 'cancelled'];
+function remoteSettingsSync(params) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) {
+    return { success: false, message: '他の処理が実行中のため待機がタイムアウトしました' };
+  }
+  try {
+    _rsSavePolicy(params && params.policy);
+    const sh = _rsRequestSheet();
+    let rows = _rsReadRequests(sh);
+    const byId = {};
+    rows.forEach(function (r) { byId[String(r.v[RS_COL.id - 1])] = r; });
+
+    const results = Array.isArray(params && params.results) ? params.results.slice(0, 50) : [];
+    results.forEach(function (res) {
+      const r = res && byId[String(res.id)];
+      if (!r || RS_REPORT_STATES.indexOf(res.state) < 0) return;
+      const cur = String(r.v[RS_COL.state - 1]);
+      // 確定済みの依頼は上書きしない（受信確認の再送などで巻き戻さない）
+      if (RS_OPEN_STATES.indexOf(cur) < 0) return;
+      if (res.state === 'received') {
+        if (cur === 'sent') _rsSetState(sh, r.row, 'received');
+        return; // cancel_requested のまま維持
+      }
+      let result = String(res.note || '');
+      if (Array.isArray(res.appliedKeys) && res.appliedKeys.length > 0) {
+        const labels = res.appliedKeys.map(function (k) { return RS_SCHEMA[k] ? RS_SCHEMA[k].label : k; }).join('、');
+        result = '適用: ' + labels + (result ? ' / ' + result : '');
+      }
+      _rsSetState(sh, r.row, res.state, { decidedAt: res.decidedAt || '', decidedBy: res.decidedBy || '', result: result });
+    });
+
+    rows = _rsReadRequests(sh);
+    const nowMs = Date.now();
+    const requests = [];
+    const cancelIds = [];
+    rows.forEach(function (r) {
+      const state = String(r.v[RS_COL.state - 1]);
+      if (state === 'sent' || state === 'received') {
+        const data = _rsParse(r.v[RS_COL.json - 1]);
+        if (data && Date.parse(data.expiresAt) <= nowMs) {
+          _rsSetState(sh, r.row, 'expired', { result: '期限内に承認されませんでした' });
+          return;
+        }
+        if (state === 'sent' && data) requests.push(data);
+      } else if (state === 'cancel_requested') {
+        cancelIds.push(String(r.v[RS_COL.id - 1]));
+      }
+    });
+    return { success: true, requests: requests, cancelIds: cancelIds, serverTime: new Date().toISOString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function _rsParse(text) {
+  try {
+    const d = JSON.parse(String(text || ''));
+    return d && typeof d === 'object' ? d : null;
+  } catch (e) { return null; }
+}
+
+
+// ============================================================
+// 依頼画面（USBで持ち運ぶ単体HTML: remote-settings.html）向けの入口
+// ------------------------------------------------------------
+// 先生はスプレッドシートを開かなくても、USBに入れた remote-settings.html から
+// 依頼を出せる。HTMLは WebアプリURL へ直接通信し、次の「操作キー」で認証する。
+//
+// - 操作キーは先生ごとに発行する（issueRemoteOperatorKey）。GAS側にはSHA-256の
+//   ハッシュだけを保存し、キー本体は発行時に1度表示するだけ。失効も個別にできる。
+// - キーは推測不能な長さ（rsk_ + 64桁の16進数）。失敗時は1.5秒待たせて総当たりを遅らせる。
+// - 操作キーで出来ることは「許可リスト内の項目の変更依頼を出す／取り消す／状況を見る」だけ。
+//   依頼の署名はGAS側（SYNC_TOKEN）で行うため、HTMLやキーにはトークンが含まれない。
+// - 依頼を出しても教室PCの設定がすぐ変わるとは限らない（承認が必要な項目は教室PCで承認される）。
+// ============================================================
+const RS_OPERATOR_ACTIONS = ['remoteSettingsSubmit', 'remoteSettingsStatus', 'remoteSettingsCancel'];
+const RS_OPERATOR_KEYS_PROP = 'RS_OPERATOR_KEYS';
+const RS_POLICY_PROP = 'RS_POLICY';
+const RS_KEY_RE = /^rsk_[0-9a-f]{64}$/;
+
+function _rsSha256Hex(text) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(text), Utilities.Charset.UTF_8);
+  return bytes.map(function (b) { return ('0' + ((b < 0 ? b + 256 : b) & 0xff).toString(16)).slice(-2); }).join('');
+}
+
+function _rsLoadOperatorKeys() {
+  const raw = PropertiesService.getScriptProperties().getProperty(RS_OPERATOR_KEYS_PROP);
+  const list = _rsParseList(raw);
+  return list.filter(function (k) { return k && typeof k.hash === 'string' && typeof k.label === 'string'; });
+}
+
+function _rsParseList(raw) {
+  try { const v = JSON.parse(String(raw || '[]')); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+}
+
+function _rsSaveOperatorKeys(list) {
+  PropertiesService.getScriptProperties().setProperty(RS_OPERATOR_KEYS_PROP, JSON.stringify(list));
+}
+
+// 操作キーを検証し、一致した持ち主のラベルを返す。不一致は null。
+function _rsVerifyOperator(key) {
+  if (typeof key !== 'string' || !RS_KEY_RE.test(key)) return null;
+  const hash = _rsSha256Hex(key);
+  let found = null;
+  _rsLoadOperatorKeys().forEach(function (k) {
+    // 全件を定数時間で比較する（途中で打ち切らない）
+    if (_timingSafeStringEqual(hash, k.hash) && !found) found = k.label;
+  });
+  return found;
+}
+
+function _rsCleanText(value, max) {
+  return String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+// スクリプトエディタ、またはメニューから実行する。キー本体は戻り値でしか得られない（保存しない）。
+function issueRemoteOperatorKey(label, noLog) {
+  const name = _rsCleanText(label, 40);
+  if (!name) throw new Error('名前（ラベル）を指定してください');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const list = _rsLoadOperatorKeys().filter(function (k) { return k.label !== name; });
+    if (list.length >= 20) throw new Error('操作キーは20個までです。不要なキーを失効してください。');
+    const key = 'rsk_' + (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '').toLowerCase();
+    list.push({ label: name, hash: _rsSha256Hex(key), createdAt: new Date().toISOString() });
+    _rsSaveOperatorKeys(list);
+    let url = '';
+    try { url = ScriptApp.getService().getUrl() || ''; } catch (e) { url = ''; }
+    const connection = { gasUrl: url, key: key, label: name };
+    // スクリプトエディタから直接実行したときだけログに出す（メニュー経由ではキーをログに残さない）。
+    if (!noLog) console.log('操作キーを発行しました: ' + name + '\n' + JSON.stringify(connection, null, 2));
+    return connection;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function issueRemoteOperatorKeyApi(params) {
+  const connection = issueRemoteOperatorKey(params && params.label, true);
+  return { success: true, connection: connection };
+}
+
+function revokeRemoteOperatorKey(label) {
+  const name = _rsCleanText(label, 40);
+  const list = _rsLoadOperatorKeys();
+  const rest = list.filter(function (k) { return k.label !== name; });
+  _rsSaveOperatorKeys(rest);
+  return list.length - rest.length;
+}
+
+function listRemoteOperatorKeyLabels() {
+  return _rsLoadOperatorKeys().map(function (k) { return k.label + '（発行 ' + _rsFmt(k.createdAt) + '）'; });
+}
+
+function issueRemoteOperatorKeyFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('USB用の操作キーを発行', 'このキーを持つ人の名前（例: 山田先生）を入力してください。\n同じ名前で発行し直すと、古いキーは使えなくなります。', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  let connection;
+  try { connection = issueRemoteOperatorKey(r.getResponseText(), true); } catch (e) { ui.alert(e.message); return; }
+  const json = JSON.stringify(connection, null, 2);
+  const esc = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font-family:sans-serif;font-size:13px;line-height:1.6">' +
+    '<p><b>この画面を閉じると、キーは二度と表示されません。</b><br>下の内容を丸ごとコピーして、<code>remote-settings-key.json</code> という名前で保存し、' +
+    '<code>remote-settings.html</code> と一緒にUSBへ入れてください。</p>' +
+    '<textarea readonly onclick="this.select()" style="width:100%;height:150px;font-family:monospace;font-size:12px">' + esc + '</textarea>' +
+    (connection.gasUrl ? '' : '<p style="color:#b45309">WebアプリのURLを自動取得できませんでした。「gasUrl」にデプロイ済みの /exec URL を入れてください。</p>') +
+    '</div>').setWidth(560).setHeight(340);
+  ui.showModalDialog(html, '操作キーを発行しました: ' + connection.label);
+}
+
+function revokeRemoteOperatorKeyFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const labels = _rsLoadOperatorKeys().map(function (k) { return k.label; });
+  if (labels.length === 0) { ui.alert('発行済みの操作キーはありません。'); return; }
+  const r = ui.prompt('操作キーを失効', '失効する人の名前を入力してください。\n発行済み: ' + labels.join('、'), ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const n = revokeRemoteOperatorKey(r.getResponseText());
+  ui.alert(n > 0 ? '失効しました。このキーを入れたUSBはもう使えません。' : '該当する名前の操作キーがありません。');
+}
+
+// ---- 教室PCのポリシー(受信モード・自動適用・ローカル固定)の保存と読み出し ----
+function _rsSavePolicy(policy) {
+  if (!policy || typeof policy !== 'object') return;
+  const keys = function (v) { return (Array.isArray(v) ? v : []).filter(function (k) { return RS_SCHEMA[k]; }); };
+  const saved = {
+    mode: policy.mode === 'off' ? 'off' : 'approve',
+    autoKeys: keys(policy.autoKeys).filter(function (k) { return RS_SCHEMA[k].autoApplyAllowed !== false; }),
+    lockedKeys: keys(policy.lockedKeys),
+    receivedAt: new Date().toISOString()
+  };
+  PropertiesService.getScriptProperties().setProperty(RS_POLICY_PROP, JSON.stringify(saved));
+}
+
+function _rsLoadPolicy() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(RS_POLICY_PROP) || 'null'); } catch (e) { return null; }
+}
+
+// ---- 依頼を出す ----
+function remoteSettingsSubmit(params) {
+  const label = _rsVerifyOperator(params && params.key);
+  if (label === null) { Utilities.sleep(1500); return { success: false, code: 'auth', message: '操作キーが正しくないか、失効しています。' }; }
+
+  const incoming = params.changes;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming) || Object.keys(incoming).length === 0) {
+    return { success: false, message: '変更する項目がありません' };
+  }
+  const current = _rsCurrentSettings();
+  const changes = {};
+  const errors = [];
+  Object.keys(incoming).forEach(function (k) {
+    const def = Object.prototype.hasOwnProperty.call(RS_SCHEMA, k) ? RS_SCHEMA[k] : null;
+    if (!def) { errors.push(k + ': 許可されていない項目です'); return; }
+    const n = _rsNormalize(def, incoming[k]);
+    if (!n.ok) { errors.push(def.label + ': ' + n.error); return; }
+    changes[k] = n.value;
+  });
+  if (errors.length > 0) return { success: false, message: errors.join(' / ') };
+
+  if (changes.lendingSuspended === true &&
+      !Object.prototype.hasOwnProperty.call(changes, 'lendingSuspendedUntil')) {
+    changes.lendingSuspendedUntil = _rsWireFromSetting(RS_SCHEMA.lendingSuspendedUntil, current.lendingSuspendedUntil);
+  }
+  if (changes.lendingSuspended !== undefined || changes.lendingSuspendedUntil !== undefined) {
+    const suspensionError = _rsSuspensionValidation(Object.assign({}, current, changes));
+    if (suspensionError) return { success: false, message: suspensionError };
+  }
+
+  // 現在値と同じ項目は依頼から除く（教室PCの画面に「変更なし」が並ばないように）
+  const effective = {};
+  Object.keys(changes).forEach(function (k) {
+    if (!_rsSameWireValue(_rsWireFromSetting(RS_SCHEMA[k], current[k]), changes[k]) ||
+        (k === 'lendingSuspendedUntil' && changes.lendingSuspended === true)) {
+      effective[k] = changes[k];
+    }
+  });
+  if (Object.keys(effective).length === 0) return { success: false, message: '現在の設定から変わる項目がありません' };
+
+  const operatorName = _rsCleanText(params.operatorName, 40);
+  const createdBy = label + (operatorName && operatorName !== label ? '（' + operatorName + '）' : '');
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { success: false, message: '混み合っています。少し待ってからもう一度お試しください。' }; }
+  try {
+    return _rsCreateRequest(effective, _rsCleanText(params.note, 500), createdBy, _currentSyncToken());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---- 取り消し ----
+function remoteSettingsCancel(params) {
+  const label = _rsVerifyOperator(params && params.key);
+  if (label === null) { Utilities.sleep(1500); return { success: false, code: 'auth', message: '操作キーが正しくないか、失効しています。' }; }
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { success: false, message: '混み合っています。少し待ってからもう一度お試しください。' }; }
+  try {
+    const n = _rsCancelOpen(params.id ? String(params.id) : '');
+    return { success: true, cancelled: n, message: n > 0 ? '取り消しを依頼しました（教室PCが次に確認したときに反映されます）' : '取り消せる依頼はありません' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---- 画面表示用の状況 ----
+function remoteSettingsStatus(params) {
+  const label = _rsVerifyOperator(params && params.key);
+  if (label === null) { Utilities.sleep(1500); return { success: false, code: 'auth', message: '操作キーが正しくないか、失効しています。' }; }
+
+  const settings = _rsCurrentSettings();
+  const current = {};
+  const redacted = {};
+  Object.keys(RS_SCHEMA).forEach(function (k) {
+    const v = _rsWireFromSetting(RS_SCHEMA[k], settings[k]);
+    if (RS_SCHEMA[k].type === 'emailList') {
+      redacted[k] = v !== undefined && v !== null && v !== '';
+      current[k] = null;
+    } else {
+      current[k] = (v === undefined) ? null : v;
+    }
+  });
+
+  const sh = _rsRequestSheet();
+  const rows = _rsReadRequests(sh).reverse().slice(0, 15).map(function (r) {
+    const data = _rsParse(r.v[RS_COL.json - 1]) || {};
+    return {
+      id: String(r.v[RS_COL.id - 1]),
+      createdAt: data.createdAt || '',
+      createdBy: String(r.v[RS_COL.by - 1] || ''),
+      note: String(r.v[RS_COL.note - 1] || ''),
+      summary: String(r.v[RS_COL.summary - 1] || ''),
+      state: String(r.v[RS_COL.state - 1] || ''),
+      stateLabel: String(r.v[RS_COL.stateLabel - 1] || ''),
+      decidedAt: String(r.v[RS_COL.decidedAt - 1] || ''),
+      result: String(r.v[RS_COL.result - 1] || ''),
+      expiresAt: data.expiresAt || ''
+    };
+  });
+
+  return {
+    success: true,
+    label: label,
+    schema: RS_SCHEMA,
+    current: current,
+    redacted: redacted,
+    syncedAt: (remote && remote.updatedAt) || null,
+    policy: _rsLoadPolicy(),
+    requests: rows,
+    limits: { maxOutstanding: RS_MAX_OUTSTANDING, validDays: RS_VALID_DAYS },
+    serverTime: new Date().toISOString()
+  };
 }

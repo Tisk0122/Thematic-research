@@ -826,6 +826,7 @@ function applySettingsToUI() {
     document.getElementById('maintenance-title').textContent = 'システムメンテナンス中';
     document.getElementById('maintenance-msg').innerHTML = '現在、システムの保守点検を行っております。<br>しばらくお待ちください。';
   }
+  _updateLendingSuspensionNotice();
 
   const deadlineEl = document.getElementById('warn-deadline-time');
   if (deadlineEl) {
@@ -837,6 +838,41 @@ function applySettingsToUI() {
   if (typeof _updateActionCards === 'function') _updateActionCards();
 
   _applyLogoutCheckMode();
+}
+
+function _studentDateString(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function _isLendingSuspensionActive(settings = _sysSettings, now = new Date()) {
+  if (!settings.lendingSuspended) return false;
+  const until = settings.lendingSuspendedUntil;
+  return !/^\d{4}-\d{2}-\d{2}$/.test(until || '') || until >= _studentDateString(now);
+}
+
+function _formatSuspensionEndDate(until) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(until || '');
+  if (!match) return '';
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return '';
+  return `${year}年${month}月${day}日`;
+}
+
+function _updateLendingSuspensionNotice() {
+  const overlay = document.getElementById('lending-suspended-overlay');
+  if (!overlay) return;
+  const topPage = document.getElementById('page-top');
+  const active = _isLendingSuspensionActive() && !_sysSettings.maintenanceMode
+    && !!topPage && topPage.classList.contains('active');
+  overlay.style.display = active ? 'flex' : 'none';
+  const message = document.getElementById('lending-suspended-msg');
+  if (message) {
+    const endDate = _formatSuspensionEndDate(_sysSettings.lendingSuspendedUntil);
+    message.textContent = endDate
+      ? `貸出は${endDate}まで休止しています。お持ちの端末の返却は通常どおり行えます。`
+      : '貸出を休止しています。お持ちの端末の返却は通常どおり行えます。';
+  }
 }
 
 function isReturnVerificationRequiredForLoan(loan) {
@@ -937,6 +973,8 @@ window.addEventListener('load', async () => {
 
   let _lastSettingsUpdatedAt = null;
   setInterval(async () => {
+    _updateLendingSuspensionNotice();
+    if (typeof _updateActionCards === 'function') _updateActionCards();
     try {
       const res = await fetch(`${ARDUINO_SERVER}/settings/meta?_t=${Date.now()}`);
       const meta = await res.json();
@@ -1076,8 +1114,9 @@ async function goToCheckout() {
     showCustomAlert('お知らせ', 'ただいまシステムメンテナンス中のため、ご利用いただけません。');
     return;
   }
-  if (_sysSettings.lendingSuspended) {
-    showCustomAlert('お知らせ', '現在、端末の貸出を休止しています。');
+  if (_isLendingSuspensionActive()) {
+    const endDate = _formatSuspensionEndDate(_sysSettings.lendingSuspendedUntil);
+    showCustomAlert('お知らせ', `現在、端末の貸出を休止しています${endDate ? `（${endDate}まで）` : ''}。`);
     return;
   }
   // 空き0台なら入力画面・カメラ録画に進まず、他の休止と同じアラートで止める。
@@ -1139,10 +1178,6 @@ async function goToReturn() {
   }
   if (_sysSettings.maintenanceMode) {
     showCustomAlert('お知らせ', 'ただいまシステムメンテナンス中のため、ご利用いただけません。');
-    return;
-  }
-  if (_sysSettings.lendingSuspended) {
-    showCustomAlert('お知らせ', '現在、端末の返却を休止しています。');
     return;
   }
   goTo('return-select');

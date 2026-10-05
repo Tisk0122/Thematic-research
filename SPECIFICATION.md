@@ -57,6 +57,11 @@ Chromebookなどの端末を、電磁ロック付きの棚から貸出・返却�
 | `local-db/sync.js` | スプレッドシートへの定期同期ジョブ(5秒デバウンス+バックストップ・空データ同期ガード) |
 | `local-db/backup.js` | ローカルDBの自動バックアップ。ファイル名は「端末貸出バックアップ_自動/手動_YYYY年MM月DD日_HH時MM分SS秒.db」形式(旧形式 app-*.db とも両対応) |
 | `local-db/email_queue.js` | 生徒宛メール（貸出確認・返却確認）の送信キュー(GAS経由) |
+| `local-db/remote_settings.js` | リモート設定(承認制)の中核。許可リスト・値の正規化・HMAC署名検証・依頼の保管・差分・項目ごとの承認 |
+| `local-db/remote_settings_job.js` | GAS「郵便受け」を定期的に取りに行くジョブ(外向きHTTPSのみ。受信確認・結果の報告も同じ往復で行う) |
+| `local-db/remote_settings_api.js` | `/api/remote-settings*` の処理(server.js から呼ばれる) |
+| `usb/remote-settings.html` | USBで持ち運ぶ依頼画面(単体HTML。操作キーで認証し、GASへ直接依頼を出す) |
+| `js/admin-remote-settings.js` | 管理画面「リモート設定」タブ(差分表示・項目別承認・受信設定) |
 | `local-db/normalize.js` | 氏名・メール・生年月日の表記ゆれ正規化 |
 | `local-db/schema.sql` | SQLiteテーブル定義(WALモード) |
 | `serial-bridge.js` | Arduinoとのシリアル通信を担う子プロセス(`child_process.fork`。自動ポート検出・再起動含む) |
@@ -204,6 +209,45 @@ WALモードで稼働しており、通常運用中でも安全にオンライ�
 - **空データ同期ガード**: ローカルDBの主要データ(貸出中・履歴など)が0件の間(初期状態・全削除直後)は、スプレッドシート側の記録を誤って全消去しないよう同期を送信せず停止します(`emptySyncBlocked`)。DBにデータが1件以上戻った時点で自動的に再開され、その時点の全体スナップショットが送信されます。状態は `GET /api/sync-status` の `blockedEmpty` / `lastNonemptyCount`(最後に送信した実データ件数)で確認でき、停止中は管理画面のヘルスチェックに「同期停止(空データ)」の警告バナーが `code: sync_blocked_empty`(レベル `warning`)として表示されます
 
 ---
+
+## リモート設定(承認制)
+
+遠隔からの設定変更は「GASを郵便受けにして、教室PCが取りに行き、管理者が承認して初めて反映する」方式。教室PCは `127.0.0.1` のみで待ち受けるままで、ポートも開けない(外向きHTTPSのみ)。
+
+### 流れ
+
+1. 先生がスプレッドシートの「リモート設定入力」に値を入れ、メニューから依頼する(`submitRemoteSettingsRequest`)。GASが `SYNC_TOKEN` を鍵にした HMAC-SHA256 署名を付け、「リモート設定依頼」シートに積む(有効期限7日、未処理は最大5件)。
+2. 教室PCの `local-db/remote_settings_job.js` が `REMOTE_SETTINGS_POLL_MS`(既定3分)ごとに `remoteSettingsSync` を呼び、未取得の依頼を受け取る。同じ呼び出しで、前回までの受信確認・承認結果をGASへ報告する(1往復)。
+3. 受け取った依頼は署名・期限・許可リスト・値の範囲を検証して `remote_settings_requests` に **pending** で保管するだけ。運用設定には触れない。
+4. 管理画面「リモート設定」で差分(現在値 vs 依頼値)を見て、項目ごとに承認/ローカルのまま を選ぶ。`POST /api/remote-settings/decision` は項目名のリストだけを受け取り、**適用する値は保管済みのものをサーバーが使う**。
+5. 適用は既存の `pushSettingsLocal` を通る(値の丸め、Arduino反映、スプレッドシート同期、設定バックアップは通常の設定保存と同じ)。適用直前にも設定バックアップを1世代残す。
+
+### 依頼画面（USBで持ち運ぶ単体HTML）と操作キー
+
+- `usb/remote-settings.html` は単体のHTML(外部読み込みなし。CSPで通信先を `script.google.com` / `script.googleusercontent.com` に限定)。WebアプリURLへ `POST`(`Content-Type: text/plain` でCORSプリフライトを回避。本文はJSON)して `remoteSettingsStatus` / `remoteSettingsSubmit` / `remoteSettingsCancel` を呼ぶ。`file://` から開いても動く。
+- 認証は「操作キー」(`rsk_` + 64桁の16進)。先生ごとに `issueRemoteOperatorKey` で発行し、GASのスクリプトプロパティ `RS_OPERATOR_KEYS` には **SHA-256ハッシュとラベルだけ**を保存する(キー本体は保存しない)。失効はラベル単位。照合は定数時間。失敗時は1.5秒待たせて総当たりを遅らせる(鍵は244ビット相当)。
+- 操作キーで可能なのは、許可リスト内の項目の依頼・取り消し・状況の閲覧のみ。依頼の署名(`SYNC_TOKEN`)はGAS側で付けるため、HTMLにもキーにもトークンは含まれない。`doPost` はこの3アクションに限り同期トークンを要求せず、他のアクションは従来どおりトークン必須。`doGet` では受け付けない。
+- 教室PCは毎回の `remoteSettingsSync` で現在のポリシー(受信モード・自動適用・ローカル固定)をGASへ送る。依頼画面はそれを表示し、各項目が「自動適用／承認が必要／ローカル固定／受付停止中」のどれかを依頼前に示す。最終連絡が15分以上前なら警告する。
+- 状況取得が返すのは許可リスト内の項目の現在値のみ。通知先メールアドレスは変更依頼に使えるが、操作キーを持つ人への不要な開示を避けるため現在値を返さず、設定済みかどうかだけを返す。
+
+### 自動適用
+
+- `remote_settings_state.auto_keys_json`(既定: `maintenanceMode`, `lendingSuspended`, `lendingSuspendedUntil`)に含まれる項目は、取り込み時の検証(署名・許可リスト・値の範囲・期限・ローカル固定の除外)を通った依頼に限り、`ingestRequest` の中で即時に `pushSettingsLocal` へ適用される。貸出休止の有効化と終了日は一緒に適用する。指定した終了日を含めて休止し、翌日から自動解除する。終了日なし（wire値 `unlimited`）なら無期限で休止する。休止中も返却は許可し、メンテナンスモードでは貸出・返却の両方を停止する。承認が必要な項目が混在する依頼は、自動項目だけを先に適用し、残りを `pending` として残す(`auto_applied_json` に記録)。
+- 自動適用の前に設定バックアップを1世代残し、監査ログ(`remote_settings_auto_apply`)に記録する。適用に失敗した場合は何も変えず承認待ちにする。ローカル固定は自動適用より優先する。
+
+### 安全の仕組み
+
+- 変更できる項目は `REMOTE_SCHEMA`(`local-db/remote_settings.js`)の許可リストのみ。GAS側 `RS_SCHEMA` と同一内容で、テストで一致を検証している。通知先メールアドレス、生徒メールアドレス形式、扉ごとの解錠時間も依頼できるが、必ず教室PCでの承認が必要で自動適用できない。通知先メールアドレスの現在値は操作キー用の状況APIでは返さない。管理者パスワード・GAS_URL/SYNC_TOKENなどの認証・接続情報は対象外。
+- 署名は `rs1\n id \n createdAt \n expiresAt \n createdBy \n key=type:value…`(キー昇順)のHMAC。GAS(`_rsCanonicalMessage`)とNode(`canonicalMessage`)で一致することをテストしている。
+- 楽観ロック: 画面を開いた時点の設定バージョン(更新時刻+内容ハッシュ)と承認時点が違えば `409 stale` で拒否する。
+- 二重適用防止: 依頼IDは一意。確定した依頼は再取得されても無視され、GAS側でも確定済みの状態は巻き戻さない。
+- 受信設定(`remote_settings_state`): `mode`=`approve`/`off`、`locked_keys_json`=ローカル固定項目。`off` の間はGASへ問い合わせない。ローカル固定の項目は取り込み時に除外され、全て固定なら自動却下する。
+- 管理者セッション必須。承認・却下・受信設定の変更は監査ログ(`remote_settings_decision` / `remote_settings_config`)に残る。
+
+### テーブル
+
+- `remote_settings_requests`: id, 依頼者, 変更内容(JSON), 無視した項目, status(`pending`/`applied`/`partial`/`rejected`/`expired`/`invalid`/`cancelled`), 決定日時・決定者・適用項目, `report_state`(GAS報告済みの状態)。確定済みは直近200件を保持。
+- `remote_settings_state`: 受信モード、ローカル固定、最終確認時刻・エラー。
 
 ## 時刻・停電後の確認
 
@@ -386,6 +430,18 @@ WALモードで稼働しており、通常運用中でも安全にオンライ�
 | `POST /api/kiosk/exit` | キオスク画面の終了(要認証セッション。`exit-kiosk.sh` でブラウザだけを閉じる。サーバー・データは停止しない) |
 | `GET /api/assets` / `POST /api/assets/toggle` / `POST /api/assets/upload` | 画像・動画アセットの一覧(有効状態)/有効・無効の切替/アップロード(拡張子は png/jpg/jpeg/webp/gif/svg/webm/mp4 のみ許可) |
 | `GET /assets/:name` | アセット配信(拡張子に応じた Content-Type) |
+
+### リモート設定(承認制)
+
+すべて管理者セッション必須。
+
+| メソッド | パス | 内容 |
+|---|---|---|
+| GET | `/api/remote-settings` | 承認待ち(差分つき)・履歴・受信設定・設定バージョン・取得状況 |
+| GET | `/api/remote-settings/summary` | 承認待ち件数(サイドバーのバッジ用) |
+| POST | `/api/remote-settings/decision` | `{id, acceptKeys[], expectedVersion}`。空配列なら却下 |
+| POST | `/api/remote-settings/config` | `{mode, lockedKeys[], autoKeys[]}` |
+| POST | `/api/remote-settings/poll-now` | GASへ今すぐ問い合わせる |
 
 ### Arduino関連
 

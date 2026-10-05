@@ -10,6 +10,9 @@ const { safeDecodePath } = require('./lib/safe-decode');
 const LDB = require('./local-db/lending');
 const { createSyncJob, getSyncStatus, resetEmptyGuard } = require('./local-db/sync');
 const { createEmailQueueWorker } = require('./local-db/email_queue');
+const { createRemoteSettingsJob } = require('./local-db/remote_settings_job');
+const { createRemoteSettingsApi } = require('./local-db/remote_settings_api');
+const RemoteSettings = require('./local-db/remote_settings');
 const {
   runBackup, listBackups, inspectBackup, prepareDatabaseRestore, createBackupJob, BACKUP_NAME_RE,
   saveSettingsBackup, pruneOldSettingsBackups, listSettingsBackups,
@@ -105,6 +108,35 @@ const syncJob = createSyncJob({
   token: SYNC_TOKEN,
   intervalMs: Number(process.env.SYNC_INTERVAL_MS) || 3 * 60 * 1000,
   logger: { warn: (msg) => slog('WARN', msg) }
+});
+
+// リモート設定（GASの「郵便受け」に登録された設定変更の依頼）。
+// 外向きHTTPSで取りに行くだけで、受け取った依頼は「承認待ち」として保管する。
+// 運用設定へ反映されるのは、教室PCの管理画面で管理者が承認した項目だけ。
+const remoteSettingsJob = createRemoteSettingsJob({
+  gasUrl: GAS_URL,
+  token: SYNC_TOKEN,
+  intervalMs: Math.max(30 * 1000, Number(process.env.REMOTE_SETTINGS_POLL_MS) || 3 * 60 * 1000),
+  logger: { info: (msg) => slog('INFO', msg), warn: (msg) => slog('WARN', msg) },
+  // 自動適用(既定: メンテナンスモード・貸出の一時休止)に使う。承認が必要な項目はここを通らない。
+  deps: {
+    applySettings: (partial, by) => { pushSettingsLocal(partial, by); snapshotSettingsBackup('auto'); },
+    snapshotBefore: () => snapshotSettingsBackup('auto'),
+    audit: (action, detail, target) => writeAuditLog(action, detail, target)
+  }
+});
+const remoteSettingsApi = createRemoteSettingsApi({
+  getSettings: () => LDB.getSettings(),
+  applySettings: (partial, by) => {
+    pushSettingsLocal(partial, by);
+    snapshotSettingsBackup('auto');
+  },
+  snapshotBefore: () => snapshotSettingsBackup('auto'),
+  audit: (action, detail, target) => writeAuditLog(action, detail, target),
+  logger: { info: (msg) => slog('INFO', msg), warn: (msg) => slog('WARN', msg) },
+  job: remoteSettingsJob,
+  gasConfigured: !!(GAS_URL && SYNC_TOKEN),
+  intervalMs: Math.max(30 * 1000, Number(process.env.REMOTE_SETTINGS_POLL_MS) || 3 * 60 * 1000)
 });
 
 // 借りた本人・返した本人への確認メールの送信キュー処理。
@@ -827,7 +859,8 @@ function _isServableStaticPath(p) {
   const ext = path.extname(normalized).toLowerCase();
   if (!_SERVABLE_STATIC_EXTS.has(ext)) return false;
   if (ext === '.html') {
-    return /^\/[a-zA-Z0-9_\-\.]+\.html$/.test(normalized);
+    return /^\/[a-zA-Z0-9_\-\.]+\.html$/.test(normalized)
+      || normalized === '/usb/make-key.html';
   }
   if (ext === '.json' || ext === '.bin') {
     return /^\/model\//.test(normalized) || /^\/assets\//.test(normalized);
@@ -3603,6 +3636,18 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      // リモート設定の承認待ち
+      try {
+        const pendingRemote = RemoteSettings.pendingCount();
+        if (pendingRemote > 0) {
+          warnings.push({
+            level: 'info',
+            code: 'remote_settings_pending',
+            message: `遠隔から設定変更の依頼が${pendingRemote}件届いています（未承認）。「リモート設定」タブで差分を確認し、承認または却下してください。承認するまで設定は変わりません。`
+          });
+        }
+      } catch (e) { /* 補助表示のため失敗しても無視 */ }
+
       // 5. 通知メール・先生向けレポートの状態
       // 実際のメール送信・スケジュール判定はすべてGAS側(Code.gs)が行うため、
       // ローカル側で有効にしていても、スプレッドシート同期(SYNC_TOKEN)が
@@ -3659,6 +3704,13 @@ const server = http.createServer(async (req, res) => {
     }
 
 
+
+    if (url.pathname === '/api/remote-settings' || url.pathname.startsWith('/api/remote-settings/')) {
+      if (!verifySession(req)) return json(res, 403, { ok: false, error: '認証されていません' });
+      const rsBody = method === 'POST' ? await readBody(req) : '';
+      const rsResult = await remoteSettingsApi.handle(method, url.pathname, rsBody);
+      return json(res, rsResult.status, rsResult.body);
+    }
 
     if (method === 'GET' && url.pathname === '/api/settings/export') {
       if (!verifySession(req)) return json(res, 403, { ok: false, error: '認証されていません' });
@@ -3969,6 +4021,11 @@ server.listen(PORT, '127.0.0.1', async () => {
     slog('INFO', 'スプレッドシートへの定期同期を開始しました');
   } else {
     slog('WARN', 'SYNC_TOKENが生成できなかったため、スプレッドシートへの同期は無効です(貸出・返却・解錠には影響しません)');
+  }
+
+  if (SYNC_TOKEN) {
+    remoteSettingsJob.start();
+    slog('INFO', 'リモート設定（承認制）の定期取得を開始しました');
   }
 
   // 貸出・返却確認メールの送信キューはSMTP設定のみに依存する

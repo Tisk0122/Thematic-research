@@ -1228,6 +1228,28 @@
     </div>
   </div>
 
+  <div id="lending-suspended-overlay" class="lending-suspended-overlay" style="display:none;"
+    role="dialog" aria-modal="true" aria-labelledby="lending-suspended-title" aria-describedby="lending-suspended-msg">
+    <div class="lending-suspended-card">
+      <div class="lending-suspended-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M16 3v4M8 3v4M3 10h18M8 15h3" />
+        </svg>
+      </div>
+      <div class="lending-suspended-eyebrow">貸出一時休止</div>
+      <div class="maintenance-title" id="lending-suspended-title">ただいま貸出を休止しています</div>
+      <div class="maintenance-msg" id="lending-suspended-msg">
+        貸出の再開予定日までお待ちください。お持ちの端末の返却は通常どおり行えます。
+      </div>
+      <button class="lending-suspended-return-btn" type="button" onclick="goToReturn()">
+        端末を返却する
+      </button>
+      <div class="lending-suspended-note">返却は貸出休止中も利用できます</div>
+    </div>
+  </div>
+
 
   <div id="arduino-down-overlay" class="arduino-down-overlay" style="display:none;" role="alertdialog" aria-modal="true"
     aria-live="assertive" aria-labelledby="arduino-down-title" aria-describedby="arduino-down-msg">

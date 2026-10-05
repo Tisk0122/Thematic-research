@@ -170,6 +170,17 @@
           <span class="nav-btn-badge is-warn" id="badge-settings-unsaved" hidden>未保存</span>
         </button>
 
+        <button class="nav-btn" data-view="remote" onclick="showView('remote')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2" />
+            <path d="M12 12v9" />
+            <path d="m8 17 4 4 4-4" />
+          </svg>
+          <span class="nav-label">リモート設定</span>
+          <span class="nav-btn-badge is-warn" id="badge-remote-settings" style="display:none" title="承認待ちの遠隔設定変更の依頼">0</span>
+        </button>
+
         <div class="sidebar-section-label">テスト・保守</div>
         <button class="nav-btn" data-view="arduino" onclick="showView('arduino')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -882,6 +893,30 @@
 
                   <div class="card">
                     <div class="card-head">
+                      <div class="card-title">貸出の一時休止</div>
+                    </div>
+                    <div class="card-body">
+                      <div class="toggle-row">
+                        <div>
+                          <div class="toggle-row-label">端末の貸出を一時休止する</div>
+                          <div class="field-hint">返却は引き続き利用できます。終了日を空欄にすると無期限になります。</div>
+                        </div>
+                        <label class="switch">
+                          <input type="checkbox" id="set-lending-suspended" onchange="markSettingsDirty()">
+                          <span class="switch-track"></span>
+                        </label>
+                      </div>
+                      <div class="field" style="max-width:280px;margin-top:16px;">
+                        <label class="field-label" for="set-lending-suspended-until">貸出休止の終了日</label>
+                        <input type="date" id="set-lending-suspended-until" class="input"
+                          oninput="markSettingsDirty()">
+                        <span class="field-hint">選択した日を含めて休止し、翌日から自動的に貸出を再開します。空欄は無期限です。</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card">
+                    <div class="card-head">
                       <div class="card-title">メールアドレス形式</div>
                     </div>
                     <div class="card-body">
@@ -1557,6 +1592,74 @@
             <p class="field-hint">履歴データが多くなるとこの画面の集計に時間がかかる場合があります。</p>
           </section>
 
+          <!-- ============ リモート設定 ============ -->
+          <section class="view" id="view-remote" data-title="リモート設定" data-desc="遠隔からの設定変更の依頼を、差分を確認してから承認します">
+            <div class="banner" style="background:var(--surface-sunken);border-color:var(--border);color:var(--text-sub);">
+              <span class="chip-dot" id="rs-status-dot"
+                style="width:7px;height:7px;border-radius:50%;background:var(--text-dim);flex-shrink:0;margin-top:5px;"></span>
+              <div style="flex:1;"><span id="rs-status-text">読み込み中…</span></div>
+              <button class="btn btn-ghost btn-sm" id="rs-poll-btn" onclick="rsPollNow()">今すぐ確認</button>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">承認待ちの依頼</div>
+                  <div class="card-sub" id="rs-pending-count">読み込み中…</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="rs-refresh-btn" onclick="loadRemoteSettingsView()">更新</button>
+              </div>
+              <div class="card-body">
+                <p class="field-hint" style="margin-top:0;">届いた依頼は、ここで承認するまで運用設定に反映されません。項目ごとに適用するかどうかを選べます。</p>
+                <div id="rs-pending-list"></div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:16px;">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">受信設定</div>
+                  <div class="card-sub">遠隔からの変更を受け付けるか、どの項目をこの端末のローカル設定に固定するか</div>
+                </div>
+              </div>
+              <div class="card-body">
+                <label class="radio-card" style="margin-bottom:8px;">
+                  <input type="radio" name="rs-mode" value="approve">
+                  <div><div class="radio-card-title">承認制で受け付ける（推奨）</div>
+                    <div class="radio-card-desc">依頼を受信して承認待ちにします。承認するまで何も変わりません。</div></div>
+                </label>
+                <label class="radio-card" style="margin-bottom:14px;">
+                  <input type="radio" name="rs-mode" value="off">
+                  <div><div class="radio-card-title">受け付けない（ローカルの設定のみで運用）</div>
+                    <div class="radio-card-desc">GASへ問い合わせず、遠隔の依頼を一切受信しません。</div></div>
+                </label>
+                <div class="field-label">ローカル固定にする項目</div>
+                <p class="field-hint" style="margin-top:0;">チェックした項目は、遠隔の依頼に含まれていても無視され、承認画面にも出ません。</p>
+                <div id="rs-lock-list"></div>
+                <div class="field-label" style="margin-top:16px;">承認なしで自動適用する項目</div>
+                <p class="field-hint" style="margin-top:0;">チェックした項目は、署名と値の検証を通った依頼であれば、承認を待たずにすぐ反映されます（メンテナンスモードの切り替えなど、急ぐ操作向け）。反映した内容は「操作ログ」と履歴に残ります。「ローカル固定」にした項目は自動適用されません。</p>
+                <div id="rs-auto-list"></div>
+                <div style="margin-top:12px;"><button class="btn btn-primary" id="rs-config-save-btn" onclick="rsSaveConfig()">受信設定を保存</button></div>
+                <p class="field-hint">通知先・生徒メールアドレス形式・扉ごとの解錠時間も変更依頼できます。これらは安全のため常に教室PCで承認が必要です。管理者パスワードとGAS連携のURL/トークンは遠隔変更できません。</p>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:16px;">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">履歴</div>
+                  <div class="card-sub">直近30件（適用した内容は「操作ログ」にも残ります）</div>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="table">
+                  <thead><tr><th>受信日時</th><th>依頼者</th><th>項目</th><th>結果</th><th>決定日時</th></tr></thead>
+                  <tbody id="rs-history-body"><tr><td colspan="5" class="table-empty-cell">読み込み中…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
           <!-- ============ 操作ログ ============ -->
           <section class="view" id="view-audit" data-title="操作ログ" data-desc="管理画面で行われた操作の記録">
             <div class="card">
@@ -1891,6 +1994,7 @@
   <script src="js/config.js"></script>
   <script src="js/admin-ui-common.js"></script>
   <script src="js/admin.js"></script>
+  <script src="js/admin-remote-settings.js"></script>
   <script src="js/admin-select.js"></script>
   <script src="js/fullscreen.js"></script>
   <script>

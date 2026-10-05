@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   blReoffense: 'double',
   maintenanceMode: false,
   lendingSuspended: false,
+  lendingSuspendedUntil: '',
   enableDebugLogs: false,
   returnDeadlineHour: 16,
   returnDeadlineMinute: 0,
@@ -148,6 +149,9 @@ function getSettings() {
   try {
     const stored = JSON.parse(row.data_json);
     const merged = Object.assign({}, DEFAULT_SETTINGS, stored);
+    if (merged.lendingSuspended && !_isLendingSuspensionActive(merged)) {
+      merged.lendingSuspended = false;
+    }
     const legacyUnlockDefaults = [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 1000];
     if (stored && Array.isArray(stored.doorUnlockDurations) &&
       stored.doorUnlockDurations.length === legacyUnlockDefaults.length &&
@@ -158,6 +162,23 @@ function getSettings() {
   } catch (e) {
     return { success: false, message: '保存済み設定の読み込みに失敗しました: ' + e.message };
   }
+}
+
+function _localDateString(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function _isValidDateOnly(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function _isLendingSuspensionActive(settings, now = new Date()) {
+  if (!settings || !settings.lendingSuspended) return false;
+  const until = settings.lendingSuspendedUntil;
+  return !until || !_isValidDateOnly(until) || until >= _localDateString(now);
 }
 
 // GASにあった Apps Script のトリガー再設定(_syncOverdueEmailTrigger等)は
@@ -182,6 +203,10 @@ function updateSettings({ passcode, data, updatedBy } = {}) {
   }
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
     return { success: false, message: '設定データはオブジェクトで指定してください' };
+  }
+  if (incoming.lendingSuspendedUntil !== undefined &&
+    incoming.lendingSuspendedUntil !== '' && !_isValidDateOnly(incoming.lendingSuspendedUntil)) {
+    return { success: false, message: '貸出休止期限は有効な日付で指定してください' };
   }
   if (incoming.emailPatterns !== undefined) {
     if (!Array.isArray(incoming.emailPatterns)) {
@@ -210,6 +235,12 @@ function updateSettings({ passcode, data, updatedBy } = {}) {
 
   const current = getSettings().settings || {};
   const merged = Object.assign({}, DEFAULT_SETTINGS, current, incoming);
+  const suspensionChanged = incoming.lendingSuspended !== undefined ||
+    incoming.lendingSuspendedUntil !== undefined;
+  if (merged.lendingSuspended && suspensionChanged && merged.lendingSuspendedUntil &&
+    (!_isValidDateOnly(merged.lendingSuspendedUntil) || merged.lendingSuspendedUntil < _localDateString())) {
+    return { success: false, message: '貸出休止期限は今日以降の有効な日付、または空欄（無期限）で指定してください' };
+  }
 
   // 数値項目は、キーボード直接入力等でHTML側のmin/maxを回避されても
   // 業務ロジック（延滞判定・自動ブラックリスト登録）に不整合が生じないよう、
@@ -249,10 +280,13 @@ function _modeBlockMessage(kind) {
   if (settings.maintenanceMode) {
     return 'ただいまシステムメンテナンス中のため、貸出・返却はご利用いただけません。';
   }
-  if (settings.lendingSuspended) {
-    return kind === 'return'
-      ? '現在、端末の返却を休止しています。しばらくお待ちください。'
-      : '現在、端末の貸出を休止しています。しばらくお待ちください。';
+  if (_isLendingSuspensionActive(settings)) {
+    if (kind !== 'checkout') return null;
+    const until = settings.lendingSuspendedUntil;
+    const deadline = _isValidDateOnly(until)
+      ? `${Number(until.slice(0, 4))}年${Number(until.slice(5, 7))}月${Number(until.slice(8, 10))}日まで`
+      : '';
+    return `現在、端末の貸出を休止しています${deadline ? `（${deadline}）` : ''}。返却は通常どおりご利用いただけます。`;
   }
   return null;
 }
