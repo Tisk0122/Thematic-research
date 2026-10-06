@@ -126,21 +126,10 @@ fi
 # （常時掲示するキオスク用途のため）
 xset s off -dpms 2>/dev/null || true
 
-# USB挿入でファイルマネージャが開き、全画面が崩れるのを防ぐ。
-# (1) ログインのたびに設定を再適用し、(2) 万一開いてしまった場合に備えて
-# キオスク実行中だけ Nemo を閉じ続ける。キオスク終了(このPIDの終了)で自動停止する。
-bash "${PROJECT_DIR}/scripts/disable-usb-filemanager.sh" 2>/dev/null || true
-# 本システム以外のアプリを起動できるショートカット等を無効化し、
-# キオスク実行中は他アプリのウィンドウを閉じ続ける(キオスク終了で自動停止)。
-# 再起動のたびに毎回適用し直す（設定が外部で戻されても次回起動時に塞ぎ直す）。
+# デスクトップ環境自体の操作制限は適用しない。パネルや端末、
+# 仮想端末への切り替えは復旧手段として常に利用できる状態にする。
+# この補助スクリプトはCinnamonでUSBを挿したときにNemoが開くことだけを防ぐ。
 bash "${PROJECT_DIR}/scripts/apply-desktop-lockdown.sh" 2>/dev/null || true
-(
-  # スーパーバイザー（このスクリプト自身）が生きている間、Nemo を閉じ続ける。
-  while kill -0 "$$" 2>/dev/null; do
-    pkill -x nemo 2>/dev/null || true
-    sleep 1
-  done
-) >/dev/null 2>&1 &
 
 BROWSER_BIN=""
 # キオスクは常にChromiumに固定する（Google Chromeとは別バイナリ・別ポリシー
@@ -252,7 +241,7 @@ while :; do
   rotate_systemd_log
   warn "キオスク画面が異常終了しました。5秒後に自動復旧します"
   sleep 5
-  # 万一、運用中にロックダウン設定が戻されていても、再起動のたびに塞ぎ直す。
+  # CinnamonでUSB自動起動の設定だけを再適用する。
   bash "${PROJECT_DIR}/scripts/apply-desktop-lockdown.sh" 2>/dev/null || true
 done
 

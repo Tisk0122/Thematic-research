@@ -15,8 +15,8 @@ cd "$(dirname "$0")/.."
 PROJECT_DIR="$(pwd)"
 LINUX_APP_DIR="$PROJECT_DIR"
 TPL_DIR="${PROJECT_DIR}/scripts/templates"
-# GAS_URL の既定値は持たない（設定漏れの端末が特定のスプレッドシートへ
-# まとまって書き込む事故を防ぐため、未設定なら「未設定」のまま起動する）
+# 既定のGAS_URLは config.env.example で設定する。別の接続先が必要な拠点は
+# config.env を変更し、未設定なら同期・メール送信を無効にする。
 
 # --- 共通UIライブラリ（配色・記号・スピナー・進捗バー・対話ウィジェット） ---
 source "${PROJECT_DIR}/scripts/ui-lib.sh"
@@ -282,7 +282,7 @@ build_item_defs() {
   add_item systemd  "自動再起動サービス（systemd）"     "クラッシュ・再起動後の自動復旧 + linger"
   add_item autokiosk "自動ログイン + キオスク自動起動"  "電源ON→全自動でキオスク画面を表示"
   add_item boardwatch "サブモニター表示の自動検出"     "HDMI接続時、拡張ディスプレイに貸出状況ボードを自動表示"
-  add_item lockdown "キオスク画面のロックダウン"        "URL制限 / ショートカット無効 / VT切替無効 / 緊急脱出"
+  add_item lockdown "キオスクの安全設定"                "ブラウザー制限 / パネル維持 / 緊急終了とOS復旧を確保"
 }
 
 # 実行順序（チェックリストの表示順とは独立に、依存関係が正しい順で実行する）
@@ -383,12 +383,15 @@ choose_items() {
 # 3) 設定ウィザード（config.env）
 # ============================================================================
 cfg_get() {
-  local key="$1" v
-  [ -f "$CONFIG_FILE" ] || { printf ''; return; }
+  local key="$1" v source_file="$CONFIG_FILE"
+  if [ ! -f "$source_file" ] && [ -f "${PROJECT_DIR}/config.env.example" ]; then
+    source_file="${PROJECT_DIR}/config.env.example"
+  fi
+  [ -f "$source_file" ] || { printf ''; return; }
   v=$(awk -F= -v k="${key}" '
     { line=$0 }
     line !~ /^[[:space:]]*#/ && line ~ ("^" k "=") { v=line; sub(/^[^=]*=/,"",v); gsub(/\r$/,"",v) }
-    END { print v }' "$CONFIG_FILE")
+    END { print v }' "$source_file")
   printf '%s' "$v"
 }
 
@@ -457,7 +460,7 @@ show_effective_config() {
   if [ -n "$(cfg_get GAS_URL)" ]; then
     ui_kv "GAS_URL" "$(cfg_get GAS_URL)"
   else
-    ui_kv "GAS_URL" "既定URL（スプレッドシート同期ON）"
+    ui_kv "GAS_URL" "未設定（同期・メール無効）"
   fi
   if [ -n "$(cfg_get EXTERNAL_STORAGE_DIR)" ]; then
     ui_kv "外部ストレージ" "$(cfg_get EXTERNAL_STORAGE_DIR)"
@@ -845,16 +848,27 @@ run_autokiosk() {
     step_warn "キオスク自動起動テンプレートが見つかりません。スキップします"
   fi
 
-  # ③ 画面のスリープ・スクリーンセーバー・自動ロックを無効化
-  if command -v gsettings >/dev/null 2>&1; then
-    gsettings set org.cinnamon.desktop.screensaver lock-enabled false >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.desktop.session idle-delay 0 >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.settings-daemon.plugins.power sleep-display-ac 0 >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.settings-daemon.plugins.power sleep-display-battery 0 >> "${LOG_FILE}" 2>&1 || true
-    step_done "画面のスリープ・自動ロックを無効化しました"
-  else
-    step_warn "gsettings が見つかりません（Cinnamon以外のデスクトップ環境の可能性）。手動で電源設定を確認してください"
-  fi
+  # ③ Cinnamon固有の画面電源設定。Xfceでは専用設定を変更せず、
+  # kiosk-autostart.shのxset設定とXfceの通常の電源設定を使う。
+  case "${XDG_CURRENT_DESKTOP:-}:${DESKTOP_SESSION:-}" in
+    *Cinnamon*|*cinnamon*)
+      if command -v gsettings >/dev/null 2>&1; then
+        gsettings set org.cinnamon.desktop.screensaver lock-enabled false >> "${LOG_FILE}" 2>&1 || true
+        gsettings set org.cinnamon.desktop.session idle-delay 0 >> "${LOG_FILE}" 2>&1 || true
+        gsettings set org.cinnamon.settings-daemon.plugins.power sleep-display-ac 0 >> "${LOG_FILE}" 2>&1 || true
+        gsettings set org.cinnamon.settings-daemon.plugins.power sleep-display-battery 0 >> "${LOG_FILE}" 2>&1 || true
+        step_done "Cinnamonの画面スリープ・自動ロックを無効化しました"
+      else
+        step_warn "gsettings が見つからず、Cinnamonの画面電源設定を変更できませんでした"
+      fi
+      ;;
+    *XFCE*|*Xfce*|*xfce*)
+      info "Xfceのパネル・キーバインド・電源設定は変更しません"
+      ;;
+    *)
+      step_warn "デスクトップ環境を判定できません。画面の電源設定は手動で確認してください"
+      ;;
+  esac
 }
 
 run_boardwatch() {
@@ -931,11 +945,8 @@ run_boardwatch() {
 }
 
 run_lockdown() {
-  # キオスク画面が全画面から抜けられないようにする4層のロックダウンを施す。
-  #   1. Chromium企業ポリシー: 開発者ツール・印刷・URL遷移などを禁止
-  #   2. Cinnamonのキーボードショートカット: Alt+Tab/Superキー等を無効化
-  #   3. X11: Ctrl+Alt+F1-F6の仮想端末切替、Ctrl+Alt+Backspaceを無効化
-  #   4. 緊急脱出: Ctrl+Alt+Shift+Q のみを明示的に残し、他は逃げ道を塞ぐ
+  # Chromium内のURL・開発者ツール制限だけを設定する。
+  # デスクトップのパネル・通常ショートカット・仮想端末切替は復旧手段として維持する。
 
   # ① Chromium企業ポリシーの配置（Google Chromeには適用しない）
   if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
@@ -962,58 +973,55 @@ run_lockdown() {
     step_warn "kiosk-policy.json.template が見つかりません。Chromiumポリシーの配置をスキップします"
   fi
 
-  # ② Cinnamonのキーボードショートカットを無効化
-  if command -v gsettings >/dev/null 2>&1; then
-    gsettings set org.cinnamon.desktop.keybindings.wm switch-windows "[]" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.desktop.keybindings.wm switch-windows-backward "[]" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.desktop.keybindings.wm switch-to-workspace-left "[]" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.desktop.keybindings.wm switch-to-workspace-right "[]" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.desktop.keybindings.media-keys terminal "[]" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set org.cinnamon.muffin overlay-key "" >> "${LOG_FILE}" 2>&1 || true
-    # USB挿入時にファイルマネージャが自動で開かないようにする(自動マウントは維持)
-    bash "${PROJECT_DIR}/scripts/disable-usb-filemanager.sh" >> "${LOG_FILE}" 2>&1 || true
-    # 他アプリを起動できるショートカット・ホットコーナー等の無効化
-    bash "${PROJECT_DIR}/scripts/apply-desktop-lockdown.sh" >> "${LOG_FILE}" 2>&1 || true
-    step_done "Cinnamonのショートカットキー（Alt+Tab・Superキー等）を無効化しました"
+  # ② 以前のバージョンが仮想端末切替を無効化した設定を残していたら、
+  # 本システム専用のファイルだけを削除してOSの復旧経路を戻す。
+  if run_step "以前の仮想端末ロック設定を解除中" -- sudo rm -f /etc/X11/xorg.conf.d/50-kiosk-no-vtswitch.conf; then
+    step_done "仮想端末への切り替えを利用できます（OS復旧手段を維持）"
   else
-    step_warn "gsettings が見つかりません。Cinnamonショートカットの無効化をスキップします"
+    step_warn "以前の仮想端末ロック設定を削除できませんでした。Ctrl+Alt+F3等が使えない場合は管理者に確認してください"
   fi
 
-  # ③ VTスイッチとZapを無効化
-  if [ -f "${TPL_DIR}/50-kiosk-no-vtswitch.conf" ]; then
-    if run_step "仮想端末切替を無効化中" -- sudo bash -c "
-      mkdir -p /etc/X11/xorg.conf.d
-      cp '${TPL_DIR}/50-kiosk-no-vtswitch.conf' /etc/X11/xorg.conf.d/50-kiosk-no-vtswitch.conf
-    "; then
-      step_done "仮想端末切替(Ctrl+Alt+F1等)を無効化しました（次回ログイン以降に有効）"
-    else
-      step_warn "仮想端末切替の無効化に失敗しました。手動で /etc/X11/xorg.conf.d/ に配置してください"
-    fi
-  else
-    step_warn "50-kiosk-no-vtswitch.conf が見つかりません。VTスイッチ無効化をスキップします"
-  fi
-
-  # ④ 管理者用「キオスク強制終了」ショートカット（Ctrl+Alt+Shift+Q）
-  if command -v gsettings >/dev/null 2>&1; then
-    local _KEYBIND_ID="device-lending-kiosk-exit"
-    local _KEYBIND_PATH="/org/cinnamon/desktop/keybindings/custom-keybindings/${_KEYBIND_ID}/"
-    local _EXISTING_LIST _NEW_LIST
-    _EXISTING_LIST=$(gsettings get org.cinnamon.desktop.keybindings custom-keybindings 2>/dev/null || echo "@as []")
-    if echo "$_EXISTING_LIST" | grep -qF "$_KEYBIND_PATH"; then
-      _NEW_LIST="$_EXISTING_LIST"
-    elif [ "$_EXISTING_LIST" = "@as []" ] || [ "$_EXISTING_LIST" = "[]" ]; then
-      _NEW_LIST="['${_KEYBIND_PATH}']"
-    else
-      _NEW_LIST=$(echo "$_EXISTING_LIST" | sed "s#]\$#, '${_KEYBIND_PATH}']#")
-    fi
-    gsettings set org.cinnamon.desktop.keybindings custom-keybindings "$_NEW_LIST" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set "org.cinnamon.desktop.keybindings.custom-keybinding:${_KEYBIND_PATH}" name "端末貸出管理システム: キオスク強制終了" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set "org.cinnamon.desktop.keybindings.custom-keybinding:${_KEYBIND_PATH}" command "/bin/bash ${PROJECT_DIR}/scripts/exit-kiosk.sh" >> "${LOG_FILE}" 2>&1 || true
-    gsettings set "org.cinnamon.desktop.keybindings.custom-keybinding:${_KEYBIND_PATH}" binding "['<Primary><Alt><Shift>q']" >> "${LOG_FILE}" 2>&1 || true
-    step_done "緊急脱出ショートカット（Ctrl+Alt+Shift+Q）を登録しました。サーバー停止中でもキオスク画面を閉じられます"
-  else
-    step_warn "gsettings が見つかりません。緊急脱出ショートカットの登録をスキップします（サーバー停止時にキオスク画面を閉じる手段がなくなります）"
-  fi
+  local _DESKTOP_ENV="${XDG_CURRENT_DESKTOP:-}:${DESKTOP_SESSION:-}"
+  case "${_DESKTOP_ENV}" in
+    *Cinnamon*|*cinnamon*)
+      if command -v gsettings >/dev/null 2>&1; then
+        local _KEYBIND_ID="device-lending-kiosk-exit"
+        local _KEYBIND_PATH="/org/cinnamon/desktop/keybindings/custom-keybindings/${_KEYBIND_ID}/"
+        local _EXISTING_LIST _NEW_LIST
+        _EXISTING_LIST=$(gsettings get org.cinnamon.desktop.keybindings custom-keybindings 2>/dev/null || echo "@as []")
+        if echo "$_EXISTING_LIST" | grep -qF "$_KEYBIND_PATH"; then
+          _NEW_LIST="$_EXISTING_LIST"
+        elif [ "$_EXISTING_LIST" = "@as []" ] || [ "$_EXISTING_LIST" = "[]" ]; then
+          _NEW_LIST="['${_KEYBIND_PATH}']"
+        else
+          _NEW_LIST=$(echo "$_EXISTING_LIST" | sed "s#]\$#, '${_KEYBIND_PATH}']#")
+        fi
+        gsettings set org.cinnamon.desktop.keybindings custom-keybindings "$_NEW_LIST" >> "${LOG_FILE}" 2>&1 || true
+        gsettings set "org.cinnamon.desktop.keybindings.custom-keybinding:${_KEYBIND_PATH}" name "端末貸出管理システム: キオスク強制終了" >> "${LOG_FILE}" 2>&1 || true
+        gsettings set "org.cinnamon.desktop.keybindings.custom-keybinding:${_KEYBIND_PATH}" command "/bin/bash ${PROJECT_DIR}/scripts/exit-kiosk.sh" >> "${LOG_FILE}" 2>&1 || true
+        gsettings set "org.cinnamon.desktop.keybindings.custom-keybinding:${_KEYBIND_PATH}" binding "['<Primary><Alt><Shift>q']" >> "${LOG_FILE}" 2>&1 || true
+        step_done "Cinnamon用の緊急終了キー（Ctrl+Alt+Shift+Q）を登録しました。パネルと通常のショートカットは維持します"
+      else
+        step_warn "gsettings が見つからず、Cinnamon用の緊急終了キーを登録できませんでした。OS復旧用のショートカットは有効です"
+      fi
+      ;;
+    *XFCE*|*Xfce*|*xfce*)
+      if command -v xfconf-query >/dev/null 2>&1; then
+        if xfconf-query -c xfce4-keyboard-shortcuts \
+          -p "/commands/custom/<Primary><Alt><Shift>q" --create -t string \
+          -s "/bin/bash ${PROJECT_DIR}/scripts/exit-kiosk.sh" >> "${LOG_FILE}" 2>&1; then
+          step_done "Xfce用の緊急終了キー（Ctrl+Alt+Shift+Q）を登録しました。パネルと通常のショートカットは維持します"
+        else
+          step_warn "Xfce用の緊急終了キーを登録できませんでした。OS復旧用のショートカットは有効です"
+        fi
+      else
+        step_warn "xfconf-query が見つからず、緊急終了キーを登録できませんでした。XfceパネルとOS復旧手段は維持します"
+      fi
+      ;;
+    *)
+      step_warn "デスクトップ環境を判定できないため、環境固有の終了キーは登録しません。パネルとOS復旧用のショートカットは変更しません"
+      ;;
+  esac
 }
 
 # 自己ホスト日本語フォント（6ウェイト）の配置チェック
@@ -1070,9 +1078,9 @@ finish_summary() {
   printf "    ${C_DIM}必要な場合のみ、管理画面の「設定」タブでONにしてください。${C_RESET}\n"
   if [ -n "$(cfg_get GAS_URL)" ]; then
     printf "    ${C_DIM}※ スプレッドシート同期: GAS_URL が設定済みなので有効です。${C_RESET}\n"
-  else
-    printf "    ${C_DIM}※ スプレッドシート同期: 既定のGAS_URLを使用します。${C_RESET}\n"
     printf "    ${C_DIM}   初回同期前に、GASスクリプトエディタで resetSyncPairing() を実行してください。${C_RESET}\n"
+  else
+    printf "    ${C_DIM}※ GAS_URL が未設定のため、スプレッドシート同期・メール送信は無効です。${C_RESET}\n"
   fi
   echo ""
   printf "  ${C_BOLD}カメラについて:${C_RESET}\n"
